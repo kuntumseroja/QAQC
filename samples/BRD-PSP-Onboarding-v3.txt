@@ -1,0 +1,110 @@
+BUSINESS REQUIREMENTS DOCUMENT
+Bank Indonesia - Payment Service Provider (PSP) Onboarding System
+Version 3.0 | April 2026
+
+1. INTRODUCTION
+This document defines the business requirements for the PSP Onboarding module
+within Bank Indonesia's Payment System Data Infrastructure (BSPI 2030).
+
+2. BUSINESS REQUIREMENTS
+
+REQ-001: PSP Registration
+The system shall allow new Payment Service Providers to submit registration
+applications through a secure web portal. Required fields: PSP Name, License Number,
+Business Type, Contact Information, Authorized Representatives, and Supporting Documents.
+Acceptance Criteria: All mandatory fields validated, duplicate license check performed.
+
+REQ-002: Document Verification
+The system shall automatically verify uploaded documents (Business License, Bank Guarantee,
+Technical Compliance Certificate) against the BI document registry.
+Acceptance Criteria: Document hash verification, expiry date validation, format compliance.
+
+REQ-003: KYC/AML Screening
+The system shall perform Know Your Customer and Anti-Money Laundering screening
+on all PSP principals and authorized signatories against PPATK watchlists.
+Acceptance Criteria: Real-time screening within 30 seconds, match confidence > 95%.
+
+REQ-004: Technical Readiness Assessment
+The system shall evaluate PSP technical infrastructure readiness including:
+- API endpoint availability and response time < 500ms
+- TLS 1.3 certificate validation
+- ISO 8583 message format compliance
+- Settlement file format compliance (BI-FAST standard)
+Acceptance Criteria: All technical checks pass with documented evidence.
+
+REQ-005: Risk Scoring
+The system shall calculate a composite risk score (0-100) for each PSP application
+based on: financial health (30%), technical readiness (25%), compliance history (25%),
+and operational capacity (20%).
+Acceptance Criteria: Score calculated within 5 seconds, audit trail maintained.
+
+REQ-006: Approval Workflow
+The system shall route applications through a multi-level approval workflow:
+Level 1: Automated validation (system)
+Level 2: Compliance Officer review
+Level 3: Technical Committee review
+Level 4: Director approval (for high-risk PSPs with score < 60)
+Acceptance Criteria: SLA tracking per level, escalation on timeout.
+
+REQ-007: PSP Credential Provisioning
+Upon approval, the system shall automatically provision:
+- API credentials (client_id, client_secret)
+- Digital certificates for mutual TLS
+- Sandbox environment access
+- Production environment access (after sandbox testing)
+Acceptance Criteria: Credentials generated within 60 seconds, securely delivered.
+
+REQ-008: Batch Processing
+The system shall support batch onboarding of up to 25 PSPs per batch cycle.
+Each batch cycle runs quarterly with the following phases:
+- Week 1-2: Application submission
+- Week 3-4: Document verification and screening
+- Week 5-6: Technical assessment
+- Week 7-8: Approval and provisioning
+Acceptance Criteria: All 25 PSPs processed within 8-week cycle.
+
+REQ-009: Dashboard and Reporting
+The system shall provide real-time dashboards showing:
+- Application pipeline status (submitted, in-review, approved, rejected)
+- Average processing time per stage
+- Compliance screening results summary
+- Quarterly onboarding metrics
+Acceptance Criteria: Dashboard refreshes every 5 minutes, exportable to PDF.
+
+REQ-010: Audit Trail
+The system shall maintain complete audit trail of all actions including:
+- User actions with timestamps
+- System automated actions
+- Document access logs
+- Approval/rejection decisions with rationale
+Acceptance Criteria: Immutable audit log, searchable, retained for 7 years.
+
+3. NON-FUNCTIONAL REQUIREMENTS
+
+NFR-001: The system shall support 500 concurrent users
+NFR-002: Page load time shall not exceed 3 seconds
+NFR-003: System availability shall be 99.9% (excluding planned maintenance)
+NFR-004: All data at rest encrypted with AES-256
+NFR-005: All data in transit encrypted with TLS 1.3
+NFR-006: System shall comply with Bank Indonesia Information Security Policy (PBI)
+NFR-007: Recovery Point Objective (RPO): 5 minutes
+NFR-008: Recovery Time Objective (RTO): 15 minutes
+
+4. DATA REQUIREMENTS
+
+Entity: PSP Application
+Fields: application_id (UUID), psp_name (VARCHAR 200), license_number (VARCHAR 50),
+business_type (ENUM: bank, non-bank, fintech, e-money), status (ENUM: submitted,
+doc_verification, kyc_screening, tech_assessment, compliance_review, approved, rejected),
+risk_score (DECIMAL 5,2), submitted_at (TIMESTAMP), approved_at (TIMESTAMP),
+assigned_officer (VARCHAR 100), batch_id (VARCHAR 20)
+
+Entity: PSP Document
+Fields: document_id (UUID), application_id (FK), document_type (ENUM: business_license,
+bank_guarantee, tech_certificate, financial_statement), file_hash (VARCHAR 64),
+verification_status (ENUM: pending, verified, rejected), verified_at (TIMESTAMP)
+
+Entity: Screening Result
+Fields: screening_id (UUID), application_id (FK), screening_type (ENUM: kyc, aml, pep),
+match_found (BOOLEAN), confidence_score (DECIMAL 5,2), watchlist_source (VARCHAR 100),
+screened_at (TIMESTAMP)

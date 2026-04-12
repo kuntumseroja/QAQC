@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Quality Control Summary Report - Sprint 24, Q3 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'IBM Plex Sans', sans-serif; color: #161616; padding: 40px; max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 24px; font-weight: 300; margin-bottom: 8px; color: #0f62fe; }
+  h2 { font-size: 16px; font-weight: 600; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #e0e0e0; }
+  p { font-size: 14px; line-height: 1.6; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th { background: #e0e0e0; text-align: left; padding: 8px 12px; font-weight: 600; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e0e0e0; }
+  tr:hover td { background: #f4f4f4; }
+  .meta { color: #6f6f6f; font-size: 12px; margin-bottom: 24px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+  .badge-pass { background: #defbe6; color: #198038; }
+  .badge-fail { background: #fff1f1; color: #da1e28; }
+  .badge-warn { background: #fcf4d6; color: #8e6a00; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e0e0e0; font-size: 11px; color: #a8a8a8; }
+  @media print { body { padding: 20px; } }
+</style>
+</head>
+<body>
+<h1>Quality Control Summary Report - Sprint 24, Q3 2026</h1>
+<div class="meta">Generated: 4/11/2026, 12:15:29 PM | QAQC4BI - Bank Indonesia Payment Infrastructure</div>
+<h2>Executive Summary</h2>
+<p>Sprint 24 Q3 2026 quality assessment reveals moderate risk levels with 8 total defects tracked across critical platform modules. With 62.5% of defects still unresolved (5 open defects vs 1 resolved), immediate attention is required on critical issues including payment timeout under high load and Terraform state drift. The 94% traceability coverage demonstrates strong test alignment, while infrastructure reviews identified 5 critical findings requiring remediation.</p>
+<h2>Test Execution Metrics</h2>
+<p>Test execution shows strong traceability coverage at 94% with comprehensive infrastructure and data quality assessments completed. Recent activities include profiling of 2.3M PSP transaction records and review of 23 Terraform files.</p>
+<h2>Defect Summary</h2>
+<p>Total of 8 defects identified with concerning severity distribution - 25% critical defects requiring immediate resolution. Defects are distributed across 8 different modules indicating system-wide quality concerns.</p>
+<h2>Quality Gate Assessment</h2>
+<p>Quality gates show mixed results. While traceability coverage meets standards at 94%, the low defect resolution rate of 12.5% and presence of 2 critical defects indicate quality gate criteria are not fully met. Infrastructure review findings and payment system issues require resolution before sprint completion.</p>
+<h2>Risk Assessment</h2>
+<p>HIGH RISK: Critical payment timeout issues pose significant business risk during high load scenarios. Infrastructure state drift creates deployment and consistency risks. With 62.5% of defects unresolved and critical issues in payment processing, immediate escalation and resource allocation is recommended.</p>
+<div class="footer">QAQC4BI - AI-Powered QA/QC Platform | Bank Indonesia BSPI 2030 | Confidential</div>
+</body>
+</html>

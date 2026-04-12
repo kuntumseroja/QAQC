@@ -1,0 +1,455 @@
+================================================================================
+VISUALIZATION DASHBOARD SPECIFICATION
+Bank Indonesia National Payment System Analytics Dashboard
+Version: 2.1
+Document Date: March 2026
+Prepared by: BI Analytics & Reporting Division
+Classification: Internal Use Only
+================================================================================
+
+1. DOCUMENT OVERVIEW
+--------------------
+This specification defines the visual and functional requirements for the Bank
+Indonesia Payment System Analytics Dashboard (BI-PSD). The dashboard provides
+real-time and historical visibility into national payment transaction volumes,
+PSP performance, system health, and regulatory compliance metrics.
+
+Target audience: BI Operations Team, Payment Oversight Division, Senior Management
+Deployment environment: Internal BI Portal (bi-analytics.bankid.go.id)
+Technology stack: Grafana 10.x with PostgreSQL/TimescaleDB data sources;
+                  fallback read from Elasticsearch for real-time metrics.
+
+--------------------------------------------------------------------------------
+
+2. DASHBOARD LAYOUT & STRUCTURE
+---------------------------------
+The dashboard is organized into four (4) horizontal sections (rows):
+
+  Row 1 - Executive Summary Bar (always visible, pinned top)
+  Row 2 - Transaction Volume Analysis (charts: bar + line)
+  Row 3 - PSP Performance & Distribution (charts: pie + table)
+  Row 4 - System Health & Infrastructure (charts: gauge + stat panels)
+
+Responsive breakpoints:
+  - Desktop (>= 1440px): Full 4-column grid layout
+  - Tablet (768px–1439px): 2-column stacked layout; gauges collapse to single row
+  - Mobile (<768px): Single column; hide table panel, show condensed stat panels only
+
+--------------------------------------------------------------------------------
+
+3. CHART SPECIFICATIONS
+------------------------
+
+3.1 MONTHLY TRANSACTION VOLUME — BAR CHART
+------------------------------------------
+Panel ID: VIZ-001
+Title: "Monthly Transaction Volume by Payment Type"
+Chart Type: Grouped Bar Chart (vertical)
+Panel Position: Row 2, columns 1–2 (spans 8/12 grid units)
+Panel Height: 320px
+
+Data Source: PostgreSQL — bi_analytics_db
+Query name: monthly_txn_volume
+SQL (simplified):
+  SELECT
+    DATE_TRUNC('month', txn_date) AS month,
+    payment_type,
+    SUM(txn_count) AS total_transactions,
+    SUM(txn_value_idr) AS total_value
+  FROM fact_transactions
+  WHERE txn_date >= NOW() - INTERVAL '12 months'
+  GROUP BY 1, 2
+  ORDER BY 1, 2;
+
+X-Axis:
+  - Field: month
+  - Format: "MMM YYYY" (e.g., "Jan 2026")
+  - Label: "Month"
+  - Grid lines: enabled, color #E0E0E0, dashed
+
+Y-Axis (Primary):
+  - Field: total_transactions
+  - Label: "Number of Transactions"
+  - Unit: none (formatted with thousand separator, e.g., "1,234,567")
+  - Min: 0, Max: auto
+  - Grid lines: enabled, color #E0E0E0
+
+Y-Axis (Secondary):
+  - Field: total_value
+  - Label: "Transaction Value (IDR Billions)"
+  - Unit: "B IDR" (divide raw value by 1,000,000,000)
+  - Display: line overlay on secondary axis
+
+Series / Grouping: payment_type field
+Expected payment_type values and assigned colors:
+  - "RTGS"          → color #1A3A6E  (BI Navy)
+  - "SKNBI"         → color #E8B422  (BI Gold)
+  - "BI-FAST"       → color #2E7D32  (Success Green)
+  - "Kartu Kredit"  → color #C62828  (Alert Red)
+  - "Kartu Debit"   → color #0277BD  (Info Blue)
+  - "QRIS"          → color #6A1B9A  (Purple)
+  - "Uang Elektronik" → color #00695C (Teal)
+
+Bar styling:
+  - Bar width: 0.7 (relative)
+  - Corner radius: 2px
+  - Opacity: 100% for current year bars; 60% for prior year comparison bars (if enabled)
+  - Tooltip: Show all series on hover with formatted values
+
+Legend:
+  - Position: Bottom
+  - Layout: Horizontal
+  - Show value: false
+  - Clickable: true (toggle series)
+
+Annotations:
+  - Mark "BI-FAST Go-Live" vertical line at November 2022
+  - Mark "QRIS Merchant Expansion" at March 2024
+  - Annotation color: #FF6F00, label font size 11px
+
+Expected data patterns:
+  - BI-FAST volumes should show exponential growth from 2022 onward
+  - RTGS values should be highest in IDR terms despite lower volume
+  - QRIS should show highest transaction count by Q4 2025
+
+Interactivity:
+  - Click bar segment → drills down to daily view for that month/type
+  - Range selector above chart: "3M", "6M", "12M", "YTD", "Custom"
+  - Export button: PNG, CSV
+
+
+3.2 TRANSACTIONS PER SECOND (TPS) TREND — LINE CHART
+-----------------------------------------------------
+Panel ID: VIZ-002
+Title: "Real-Time TPS Trend (BI-FAST System)"
+Chart Type: Line Chart with area fill
+Panel Position: Row 2, columns 3–4 (spans 4/12 grid units)
+Panel Height: 320px
+
+Data Source: Elasticsearch — bi_fast_metrics_*
+Index pattern: bi_fast_metrics-YYYY.MM.DD
+Query: aggregation on field tps_value over time bucket 1 minute
+
+Time range: Last 60 minutes (auto-refreshing every 30 seconds)
+
+X-Axis:
+  - Field: @timestamp
+  - Format: "HH:mm" (24-hour)
+  - Label: "Time"
+
+Y-Axis:
+  - Field: tps_value (avg)
+  - Label: "Transactions Per Second"
+  - Min: 0
+  - Soft Max: 5000 (extend if exceeded)
+  - Unit: "tps"
+
+Series:
+  - "BI-FAST TPS": color #2E7D32, line width 2px, area fill opacity 0.15
+  - "SKNBI TPS": color #E8B422, line width 1.5px, dashed, no fill
+  - "RTGS TPS": color #1A3A6E, line width 1.5px, dotted, no fill
+
+Threshold lines (horizontal):
+  - WARNING threshold at 3500 TPS: dashed orange (#FF9800), labeled "Warning"
+  - CRITICAL threshold at 4500 TPS: dashed red (#F44336), labeled "Critical SLA Breach"
+  - SLA Target at 2000 TPS minimum: dashed green (#4CAF50), labeled "Min SLA"
+
+Data point styling:
+  - Show points: only on last data point (current value callout)
+  - Interpolation: smooth (cardinal)
+  - Null value handling: connect gaps up to 2-minute gaps; show gap markers for longer
+
+Legend:
+  - Position: Top-right (inside chart area)
+  - Background: rgba(255,255,255,0.85)
+
+Alerts (Grafana alerting):
+  - Alert rule: "BI-FAST TPS Critical" — triggers when 5-min avg > 4500 TPS
+  - Notification channel: PagerDuty + ops-alerts Slack channel
+  - Alert color: red border on panel when firing
+
+Tooltip:
+  - Mode: All series
+  - Sort: Descending by value
+
+
+3.3 TRANSACTION TYPE DISTRIBUTION — PIE CHART
+---------------------------------------------
+Panel ID: VIZ-003
+Title: "Transaction Type Distribution (Current Month)"
+Chart Type: Donut / Pie Chart
+Panel Position: Row 3, column 1 (spans 3/12 grid units)
+Panel Height: 280px
+
+Data Source: PostgreSQL — bi_analytics_db
+Query: Aggregate current month transaction count by payment_type
+
+Display mode: Donut (inner radius 55%)
+Inner label: Total count + "Total Txns" text
+
+Slice colors (match VIZ-001 color scheme):
+  - "RTGS"           → #1A3A6E
+  - "SKNBI"          → #E8B422
+  - "BI-FAST"        → #2E7D32
+  - "Kartu Kredit"   → #C62828
+  - "Kartu Debit"    → #0277BD
+  - "QRIS"           → #6A1B9A
+  - "Uang Elektronik"→ #00695C
+
+Slice label display: Show percentage (≥3%), hide label for slices <3%
+Slice border: 2px white separator between slices
+
+Legend:
+  - Position: Right of chart
+  - Show percentage: true
+  - Show value: true (formatted count)
+  - Max items: 7
+
+Tooltip: Show slice name, count, percentage on hover
+
+Interactivity:
+  - Click slice → filters entire dashboard to that payment type
+  - Dashboard variable: $payment_type (multi-select dropdown at top)
+
+
+3.4 TOP PSP PERFORMANCE TABLE
+------------------------------
+Panel ID: VIZ-004
+Title: "Top 20 Payment Service Providers — MTD Performance"
+Chart Type: Data Table with conditional formatting
+Panel Position: Row 3, columns 2–4 (spans 9/12 grid units)
+Panel Height: 280px
+
+Data Source: PostgreSQL — bi_analytics_db
+Query: Join fact_transactions with dim_psp on psp_id, aggregate MTD
+
+Columns (in order):
+  Col 1: Rank             — format: integer (1, 2, 3…); width: 50px
+  Col 2: PSP Name         — format: text; link to PSP detail page; width: 180px
+  Col 3: License Number   — format: text; width: 120px
+  Col 4: Tier             — format: badge (Tier 1 = blue, Tier 2 = green, Tier 3 = grey)
+  Col 5: MTD Volume       — format: integer with thousand sep; align: right; width: 120px
+  Col 6: MTD Value (IDR B)— format: decimal (2dp) + "B"; align: right; width: 140px
+  Col 7: Success Rate %   — format: percentage; conditional color (see below); width: 110px
+  Col 8: Avg Latency (ms) — format: integer + "ms"; conditional color; width: 120px
+  Col 9: Disputes MTD     — format: integer; conditional color; width: 100px
+  Col 10: Status          — format: icon badge; width: 80px
+
+Conditional formatting rules:
+  Success Rate %:
+    ≥ 99.9%  → green background (#E8F5E9)
+    99.0–99.89% → yellow background (#FFFDE7)
+    < 99.0%  → red background (#FFEBEE), bold red text
+
+  Avg Latency (ms):
+    ≤ 500ms  → no highlight
+    501–1000ms → yellow (#FFFDE7)
+    > 1000ms → red (#FFEBEE)
+
+  Disputes MTD:
+    0       → green text
+    1–5     → black text
+    > 5     → red text, bold
+
+  Status badge:
+    "Active"    → green dot + "Active"
+    "Suspended" → red dot + "Suspended"
+    "Probation" → orange dot + "Probation"
+    "Inactive"  → grey dot + "Inactive"
+
+Sorting: Default sort by MTD Volume descending
+Pagination: Show 20 rows, pagination controls if >20
+Search/Filter: Column-level text filter on PSP Name
+Pinned columns: Rank, PSP Name (sticky on horizontal scroll)
+
+Export: CSV, Excel buttons in panel header
+
+
+3.5 SYSTEM HEALTH GAUGES
+--------------------------
+Panel ID: VIZ-005 through VIZ-010 (six gauge panels)
+Title (series): "System Health Overview"
+Chart Type: Gauge (radial)
+Panel Position: Row 4, columns 1–6 (one per column, 2/12 each)
+Panel Height: 200px
+
+Gauge panels:
+  VIZ-005: "BI-FAST Availability"
+    - Metric: bi_fast_uptime_percent (last 30 days)
+    - Unit: %
+    - Min: 95, Max: 100
+    - Threshold zones:
+        < 99.0%  → Red
+        99.0–99.5% → Yellow/Orange
+        ≥ 99.5%  → Green
+    - SLA target line: 99.5%
+    - Current value display: large, center of gauge
+
+  VIZ-006: "SKNBI Availability"
+    - Metric: sknbi_uptime_percent
+    - Same thresholds as VIZ-005
+    - SLA target: 99.0%
+
+  VIZ-007: "RTGS Availability"
+    - Metric: rtgs_uptime_percent
+    - SLA target: 99.9% (stricter)
+    - Threshold zones:
+        < 99.9%  → Red
+        99.9–99.95% → Yellow
+        ≥ 99.95% → Green
+
+  VIZ-008: "API Gateway Error Rate"
+    - Metric: api_gateway_error_rate_percent
+    - Unit: % (error rate — lower is better; invert color logic)
+    - Min: 0, Max: 5
+    - Threshold zones (inverted):
+        > 2.0%   → Red
+        0.5–2.0% → Yellow
+        ≤ 0.5%   → Green
+    - Display label: "API Error Rate"
+
+  VIZ-009: "Database Replication Lag"
+    - Metric: db_replication_lag_seconds
+    - Unit: seconds
+    - Min: 0, Max: 60
+    - Threshold zones:
+        > 30s    → Red
+        10–30s   → Yellow
+        ≤ 10s    → Green
+    - Display label: "DB Lag (s)"
+
+  VIZ-010: "Queue Depth (BI-FAST)"
+    - Metric: bifast_queue_depth (messages pending)
+    - Unit: messages
+    - Min: 0, Max: 100000
+    - Threshold zones:
+        > 50000  → Red
+        10000–50000 → Yellow
+        ≤ 10000  → Green
+    - Display label: "Queue Depth"
+
+All gauges:
+  - Gauge arc: 240 degrees
+  - Arc background color: #EEEEEE
+  - Needle: enabled
+  - Numeric value: show below gauge, font size 16px bold
+  - Unit label: show below value, font size 11px, grey
+  - Padding: 8px
+
+--------------------------------------------------------------------------------
+
+4. GLOBAL DASHBOARD CONTROLS
+------------------------------
+Located in the dashboard header (top bar, sticky):
+
+4.1 Time Range Picker
+  - Default: Last 30 days
+  - Quick selections: Last 1h, Last 24h, Last 7d, Last 30d, Last 3M, Last 12M, Custom
+  - Refresh interval options: Off, 30s, 1m, 5m, 15m, 1h
+  - Default refresh for real-time panels: 30s (overrides global for VIZ-002)
+
+4.2 Dashboard Variables (dropdowns):
+  $payment_type:  Multi-select; default: All; values from dim_payment_type
+  $psp_filter:    Multi-select; default: All; values from dim_psp (name)
+  $currency:      Single select; default: IDR; options: IDR, USD, EUR, SGD, CNY
+  $region:        Multi-select; default: All; values: Jawa, Sumatera, Kalimantan,
+                  Sulawesi, Bali & Nusa Tenggara, Papua & Maluku
+
+4.3 Export Controls:
+  - "Export Dashboard PDF" button → generates full-page PDF via Grafana reporting
+  - "Download Data (CSV)" → bulk export of all panel queries as zip of CSVs
+  - Scheduled report: monthly auto-email to ops-reporting@bankid.go.id
+
+4.4 Annotations Toggle:
+  - Checkbox: "Show System Events" (maintenance windows, go-live dates)
+  - Checkbox: "Show Regulatory Events" (regulatory deadlines, BI circulars)
+
+--------------------------------------------------------------------------------
+
+5. DATA SOURCE CONFIGURATION
+------------------------------
+5.1 PostgreSQL (bi_analytics_db)
+  Host: bi-db-primary.internal.bankid.go.id:5432
+  Database: bi_analytics
+  User: grafana_readonly
+  SSL: require
+  Query timeout: 30s
+  Max connections: 10
+  Connection pool: enabled
+
+5.2 Elasticsearch (bi_fast_metrics)
+  URL: https://bi-es-cluster.internal.bankid.go.id:9200
+  Index pattern: bi_fast_metrics-*
+  Authentication: API Key (stored in Grafana secrets)
+  Timeout: 10s
+  Max concurrent shard requests: 5
+
+5.3 Prometheus (infrastructure metrics)
+  URL: http://bi-prometheus.internal.bankid.go.id:9090
+  Scrape interval source: 15s
+  Used by: VIZ-005 through VIZ-010 (system health gauges)
+
+--------------------------------------------------------------------------------
+
+6. PERFORMANCE REQUIREMENTS
+------------------------------
+- Dashboard initial load time: < 3 seconds (LCP on 100Mbps internal network)
+- Panel data refresh: individual panel queries should complete in < 2 seconds
+- Concurrent users: dashboard must support 50 concurrent users without degradation
+- Cache: Grafana data source caching enabled for PostgreSQL queries
+    Cache TTL: 5 minutes for historical panels (VIZ-001, VIZ-003, VIZ-004)
+    Cache TTL: 0 (no cache) for real-time panels (VIZ-002, VIZ-005 to VIZ-010)
+- Row-level security: PSP-specific users see only their own PSP data in VIZ-004
+
+--------------------------------------------------------------------------------
+
+7. ACCESSIBILITY & COMPLIANCE
+-------------------------------
+- Color scheme must pass WCAG AA contrast ratio (4.5:1 minimum for text)
+- All charts must have alt-text descriptions for screen reader compatibility
+- Color coding must not rely solely on color (use icons/patterns for colorblind users)
+  - Colorblind-safe palette override available via user preference setting
+- Dashboard labels: Bahasa Indonesia primary, English secondary (toggle in header)
+- Regulatory mandate: Dashboard data must reflect source data within 15-minute lag
+  for intraday views; daily batch data reconciled by 06:00 WIB each business day
+
+--------------------------------------------------------------------------------
+
+8. ERROR STATES & FALLBACKS
+-----------------------------
+- If PostgreSQL query times out: show "Data Unavailable — Retrying" placeholder
+  with spinner; retry every 30 seconds; alert ops team after 3 consecutive failures
+- If Elasticsearch is unreachable: VIZ-002 shows last-known-good cached snapshot
+  with "LIVE DATA UNAVAILABLE — Showing cached data from [timestamp]" banner in red
+- If gauge metric is null: display "N/A" in center of gauge with grey arc
+- No-data condition for bar chart: display "No transactions in selected period"
+  with suggestion to broaden date range
+
+--------------------------------------------------------------------------------
+
+9. VALIDATION CHECKLIST FOR TESTING
+--------------------------------------
+The following items must be validated during UAT:
+
+[ ] VIZ-001: All 7 payment types render with correct colors; secondary axis (IDR value)
+    displays on correct Y-axis; drill-down to daily view works correctly
+[ ] VIZ-001: "BI-FAST Go-Live" annotation visible at Nov 2022 with correct label
+[ ] VIZ-002: Threshold lines visible at 3500 TPS and 4500 TPS; chart auto-refreshes
+    every 30 seconds without full page reload
+[ ] VIZ-003: Donut inner label shows correct total; slices <3% hidden from label
+    but visible in tooltip; clicking slice filters VIZ-004 table
+[ ] VIZ-004: Conditional color coding applies correctly for all three columns;
+    "Tier 1" badge renders in blue; table pagination works at >20 rows
+[ ] VIZ-005 to VIZ-010: Gauge arc color changes to red when threshold breached;
+    needle points accurately to value; SLA target line visible on arc
+[ ] Global: $payment_type variable filters VIZ-001, VIZ-003, and VIZ-004 simultaneously
+[ ] Responsive: Tablet layout (1024px) shows 2-column stacked; mobile hides table
+[ ] Accessibility: All panels have title and description; color contrast passes
+[ ] Performance: Full dashboard loads in <3s on internal network; no query exceeds 2s
+
+================================================================================
+END OF SPECIFICATION
+Document Owner: BI Analytics Division
+Review Cycle: Quarterly
+Next Review: June 2026
+================================================================================

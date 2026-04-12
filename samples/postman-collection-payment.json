@@ -1,0 +1,794 @@
+{
+  "info": {
+    "_postman_id": "a7f3c1d2-8e4b-4f9a-b6d1-2e5c8a9f0b3d",
+    "name": "BI-PAY Payment System API",
+    "description": "Postman collection for Bank Indonesia National Payment System (BI-PAY) API. Covers PSP authentication, payment submission, status query, bulk payment, FX conversion, QRIS, and settlement endpoints. Use this collection with the JMeter-Postman converter or k6 for performance testing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api-gateway.bipay.bankid.go.id",
+      "type": "string",
+      "description": "BI-PAY API Gateway base URL"
+    },
+    {
+      "key": "api_version",
+      "value": "v2",
+      "type": "string"
+    },
+    {
+      "key": "psp_id",
+      "value": "PSP-001-DANA",
+      "type": "string",
+      "description": "Test PSP identifier"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT Bearer token — populated by Auth request pre-script"
+    },
+    {
+      "key": "transaction_id",
+      "value": "",
+      "type": "string",
+      "description": "Set by payment submission response"
+    },
+    {
+      "key": "batch_id",
+      "value": "",
+      "type": "string",
+      "description": "Set by bulk payment submission response"
+    },
+    {
+      "key": "rate_lock_id",
+      "value": "",
+      "type": "string",
+      "description": "Set by FX rate lock response"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "POST /auth/token — PSP OAuth2 Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has access_token', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('access_token');",
+                  "    pm.expect(jsonData.access_token).to.not.be.empty;",
+                  "});",
+                  "",
+                  "pm.test('Token type is Bearer', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.token_type).to.eql('Bearer');",
+                  "});",
+                  "",
+                  "pm.test('Expires_in is 86400 seconds', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.expires_in).to.eql(86400);",
+                  "});",
+                  "",
+                  "// Auto-populate access token for subsequent requests",
+                  "if (pm.response.code === 200) {",
+                  "    var token = pm.response.json().access_token;",
+                  "    pm.collectionVariables.set('access_token', token);",
+                  "    console.log('Access token set: ' + token.substring(0, 20) + '...');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "Unique request ID for idempotency"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{psp_id}}"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{$randomPassword}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "payment:submit payment:query fx:quote"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/oauth2/token",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "oauth2", "token"]
+            },
+            "description": "Obtain OAuth2 Bearer token using client_credentials grant. Token valid for 24 hours. Used in Authorization header for all payment API calls."
+          },
+          "response": [
+            {
+              "name": "200 OK — Token Issued",
+              "originalRequest": {
+                "method": "POST",
+                "url": "{{base_url}}/auth/oauth2/token"
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"access_token\": \"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJQU1AtMDAxLURBTkEiLCJzY29wZSI6WyJwYXltZW50OnN1Ym1pdCIsInBheW1lbnQ6cXVlcnkiLCJmeDpxdW90ZSJdLCJleHAiOjE3NDI2NDAwMDB9.signature\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 86400,\n  \"scope\": \"payment:submit payment:query fx:quote\"\n}"
+            },
+            {
+              "name": "401 Unauthorized — Invalid Credentials",
+              "code": 401,
+              "body": "{\n  \"error\": \"invalid_client\",\n  \"error_description\": \"Client authentication failed. Invalid client_id or client_secret.\",\n  \"error_code\": \"AUTH-001\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Single Payment",
+      "item": [
+        {
+          "name": "POST /payments — Submit BI-FAST Payment",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Generate unique idempotency key",
+                  "pm.variables.set('idempotency_key', 'IDEM-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9));",
+                  "",
+                  "// Set transaction timestamp in ISO 8601 WIB",
+                  "var now = new Date();",
+                  "pm.variables.set('txn_timestamp', now.toISOString());"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 202 Accepted', function() {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "pm.test('Response has transaction_id', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('transaction_id');",
+                  "    pm.collectionVariables.set('transaction_id', jsonData.data.transaction_id);",
+                  "});",
+                  "",
+                  "pm.test('Response has status PENDING or PROCESSING', function() {",
+                  "    var status = pm.response.json().data.status;",
+                  "    pm.expect(['PENDING', 'PROCESSING']).to.include(status);",
+                  "});",
+                  "",
+                  "pm.test('Response time is less than 1000ms', function() {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "});",
+                  "",
+                  "pm.test('Response Content-Type is application/json', function() {",
+                  "    pm.response.to.have.header('Content-Type');",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Request-ID", "value": "{{$guid}}" },
+              { "key": "X-Idempotency-Key", "value": "{{idempotency_key}}" },
+              { "key": "X-PSP-ID", "value": "{{psp_id}}" },
+              { "key": "X-Channel", "value": "MOBILE_APP" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_type\": \"BI_FAST\",\n  \"source\": {\n    \"account_number\": \"1234567890\",\n    \"account_name\": \"Budi Santoso\",\n    \"bank_code\": \"014\",\n    \"bank_name\": \"Bank Central Asia\"\n  },\n  \"destination\": {\n    \"account_number\": \"9876543210\",\n    \"account_name\": \"Sari Dewi\",\n    \"bank_code\": \"008\",\n    \"bank_name\": \"Bank Mandiri\",\n    \"proxy_type\": \"PHONE\",\n    \"proxy_value\": \"+6281234567890\"\n  },\n  \"amount\": {\n    \"value\": 1500000,\n    \"currency\": \"IDR\"\n  },\n  \"reference\": {\n    \"psp_reference\": \"PSP-TXN-20260310-001\",\n    \"customer_reference\": \"Pembayaran Tagihan Bulan Maret\"\n  },\n  \"metadata\": {\n    \"device_id\": \"device-abc-123\",\n    \"ip_address\": \"192.168.1.100\",\n    \"user_agent\": \"BIPAYApp/2.4.1 Android/14\",\n    \"latitude\": -6.2088,\n    \"longitude\": 106.8456\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/payments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "payments"]
+            },
+            "description": "Submit a single BI-FAST payment transaction. Returns 202 Accepted with transaction_id. Use the GET /payments/{id} endpoint to poll for final status (COMPLETED/FAILED)."
+          },
+          "response": [
+            {
+              "name": "202 Accepted — Payment Queued",
+              "code": 202,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"transaction_id\": \"TXN-20260310-BIF-000001234\",\n    \"psp_reference\": \"PSP-TXN-20260310-001\",\n    \"status\": \"PROCESSING\",\n    \"payment_type\": \"BI_FAST\",\n    \"amount\": { \"value\": 1500000, \"currency\": \"IDR\" },\n    \"submitted_at\": \"2026-03-10T08:30:00+07:00\",\n    \"estimated_completion\": \"2026-03-10T08:30:25+07:00\"\n  },\n  \"meta\": { \"request_id\": \"req-uuid-001\", \"timestamp\": \"2026-03-10T08:30:00Z\" }\n}"
+            },
+            {
+              "name": "422 Unprocessable — Insufficient Balance",
+              "code": 422,
+              "body": "{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"PAY-003\",\n    \"message\": \"Insufficient balance in source account.\",\n    \"details\": { \"available_balance\": 500000, \"requested_amount\": 1500000 }\n  }\n}"
+            },
+            {
+              "name": "429 Too Many Requests — Rate Limit",
+              "code": 429,
+              "body": "{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"RATE-001\",\n    \"message\": \"Daily API quota exceeded for PSP.\",\n    \"details\": { \"daily_limit\": 10000, \"calls_today\": 10001, \"reset_at\": \"2026-03-11T00:00:00+07:00\" }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /payments/{id} — Query Transaction Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Transaction ID matches requested', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.transaction_id).to.eql(pm.collectionVariables.get('transaction_id'));",
+                  "});",
+                  "",
+                  "pm.test('Status is a valid terminal or interim state', function() {",
+                  "    var status = pm.response.json().data.status;",
+                  "    pm.expect(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'REVERSED']).to.include(status);",
+                  "});",
+                  "",
+                  "pm.test('Completed transaction has completion_timestamp', function() {",
+                  "    var data = pm.response.json().data;",
+                  "    if (data.status === 'COMPLETED') {",
+                  "        pm.expect(data).to.have.property('completion_timestamp');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "GET",
+            "header": [
+              { "key": "X-Request-ID", "value": "{{$guid}}" },
+              { "key": "X-PSP-ID", "value": "{{psp_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/payments/{{transaction_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "payments", "{{transaction_id}}"]
+            },
+            "description": "Poll for transaction status by transaction_id. Recommended polling interval: 5 seconds. Maximum poll time: 120 seconds before treating as TIMEOUT."
+          },
+          "response": [
+            {
+              "name": "200 OK — Transaction Completed",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"transaction_id\": \"TXN-20260310-BIF-000001234\",\n    \"psp_reference\": \"PSP-TXN-20260310-001\",\n    \"status\": \"COMPLETED\",\n    \"payment_type\": \"BI_FAST\",\n    \"amount\": { \"value\": 1500000, \"currency\": \"IDR\" },\n    \"submitted_at\": \"2026-03-10T08:30:00+07:00\",\n    \"completion_timestamp\": \"2026-03-10T08:30:18+07:00\",\n    \"bi_fast_reference\": \"BIF-2026031000000456\",\n    \"clearing_status\": \"SETTLED\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /payments/{id}/reverse — Request Reversal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function() {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "pm.test('Reversal ID returned', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('reversal_id');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Request-ID", "value": "{{$guid}}" },
+              { "key": "X-Idempotency-Key", "value": "IDEM-REV-{{transaction_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason_code\": \"CUSTOMER_REQUEST\",\n  \"reason_description\": \"Customer requested cancellation before settlement\",\n  \"requested_by\": \"{{psp_id}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/payments/{{transaction_id}}/reverse",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "payments", "{{transaction_id}}", "reverse"]
+            },
+            "description": "Request reversal of a completed or processing transaction. Only allowed within 30 minutes of transaction completion. Reversal reasons: CUSTOMER_REQUEST, DUPLICATE, FRAUD, TECHNICAL_ERROR."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Bulk Payment",
+      "item": [
+        {
+          "name": "POST /payments/bulk — Submit Bulk Payment Batch",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.variables.set('bulk_idempotency_key', 'BULK-IDEM-' + Date.now());"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 202', function() {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "pm.test('Batch ID returned', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('batch_id');",
+                  "    pm.collectionVariables.set('batch_id', jsonData.data.batch_id);",
+                  "});",
+                  "",
+                  "pm.test('Total count matches submitted count', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.total_count).to.eql(3);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Request-ID", "value": "{{$guid}}" },
+              { "key": "X-Idempotency-Key", "value": "{{bulk_idempotency_key}}" },
+              { "key": "X-PSP-ID", "value": "{{psp_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batch_reference\": \"BULK-PAYROLL-20260310\",\n  \"payment_type\": \"BI_FAST\",\n  \"debit_account\": {\n    \"account_number\": \"1000000001\",\n    \"bank_code\": \"002\",\n    \"account_name\": \"PT Maju Bersama Payroll Account\"\n  },\n  \"transactions\": [\n    {\n      \"sequence\": 1,\n      \"destination_account\": \"5551234001\",\n      \"destination_bank_code\": \"014\",\n      \"destination_name\": \"Ahmad Fauzi\",\n      \"amount\": 8500000,\n      \"currency\": \"IDR\",\n      \"reference\": \"Gaji Maret 2026 - Ahmad Fauzi\"\n    },\n    {\n      \"sequence\": 2,\n      \"destination_account\": \"5551234002\",\n      \"destination_bank_code\": \"008\",\n      \"destination_name\": \"Rina Marlina\",\n      \"amount\": 7200000,\n      \"currency\": \"IDR\",\n      \"reference\": \"Gaji Maret 2026 - Rina Marlina\"\n    },\n    {\n      \"sequence\": 3,\n      \"destination_account\": \"5551234003\",\n      \"destination_bank_code\": \"022\",\n      \"destination_name\": \"Dedi Kurniawan\",\n      \"amount\": 9100000,\n      \"currency\": \"IDR\",\n      \"reference\": \"Gaji Maret 2026 - Dedi Kurniawan\"\n    }\n  ],\n  \"execution_mode\": \"BEST_EFFORT\",\n  \"callback_url\": \"https://api.psp-dana.co.id/callbacks/bipay/bulk\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/payments/bulk",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "payments", "bulk"]
+            },
+            "description": "Submit a bulk payment batch. Supports up to 1000 transactions per batch. execution_mode: BEST_EFFORT (process all, report failures) or ALL_OR_NOTHING (rollback all on any failure)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /payments/bulk/{batch_id} — Bulk Batch Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Batch status is valid', function() {",
+                  "    var status = pm.response.json().data.batch_status;",
+                  "    pm.expect(['PROCESSING', 'COMPLETED', 'PARTIALLY_COMPLETED', 'FAILED']).to.include(status);",
+                  "});",
+                  "",
+                  "pm.test('success_count + failed_count <= total_count', function() {",
+                  "    var data = pm.response.json().data;",
+                  "    pm.expect(data.success_count + data.failed_count).to.be.at.most(data.total_count);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "GET",
+            "header": [
+              { "key": "X-PSP-ID", "value": "{{psp_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/payments/bulk/{{batch_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "payments", "bulk", "{{batch_id}}"]
+            },
+            "description": "Query status of a bulk payment batch. Returns summary counts and per-transaction status list."
+          },
+          "response": [
+            {
+              "name": "200 OK — Batch Status",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"batch_id\": \"BATCH-20260310-000042\",\n    \"batch_reference\": \"BULK-PAYROLL-20260310\",\n    \"batch_status\": \"COMPLETED\",\n    \"total_count\": 3,\n    \"success_count\": 3,\n    \"failed_count\": 0,\n    \"total_amount\": 24800000,\n    \"currency\": \"IDR\",\n    \"submitted_at\": \"2026-03-10T09:00:00+07:00\",\n    \"completed_at\": \"2026-03-10T09:00:42+07:00\",\n    \"transactions\": [\n      { \"sequence\": 1, \"transaction_id\": \"TXN-20260310-BIF-000001235\", \"status\": \"COMPLETED\", \"amount\": 8500000 },\n      { \"sequence\": 2, \"transaction_id\": \"TXN-20260310-BIF-000001236\", \"status\": \"COMPLETED\", \"amount\": 7200000 },\n      { \"sequence\": 3, \"transaction_id\": \"TXN-20260310-BIF-000001237\", \"status\": \"COMPLETED\", \"amount\": 9100000 }\n    ]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. FX & Cross-Border",
+      "item": [
+        {
+          "name": "GET /fx/rates — Get Current FX Rates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('IDR/USD rate is present', function() {",
+                  "    var rates = pm.response.json().data.rates;",
+                  "    var usdRate = rates.find(r => r.pair === 'IDR/USD');",
+                  "    pm.expect(usdRate).to.not.be.undefined;",
+                  "    pm.expect(usdRate.mid_rate).to.be.a('number');",
+                  "});",
+                  "",
+                  "pm.test('Rate timestamp is recent (within 5 minutes)', function() {",
+                  "    var data = pm.response.json().data;",
+                  "    var rateTime = new Date(data.rate_as_of);",
+                  "    var now = new Date();",
+                  "    var diffMinutes = (now - rateTime) / 1000 / 60;",
+                  "    pm.expect(diffMinutes).to.be.below(5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "GET",
+            "header": [{ "key": "X-PSP-ID", "value": "{{psp_id}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/fx/rates?pairs=IDR/USD,IDR/SGD,IDR/MYR,IDR/CNY",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "fx", "rates"],
+              "query": [
+                {
+                  "key": "pairs",
+                  "value": "IDR/USD,IDR/SGD,IDR/MYR,IDR/CNY",
+                  "description": "Comma-separated currency pairs (ISO 4217)"
+                }
+              ]
+            },
+            "description": "Retrieve indicative FX rates for specified currency pairs. Rates are updated every 60 seconds from Bloomberg B-PIPE. Use POST /fx/rate-lock to get a firm 90-second rate lock for transaction use."
+          },
+          "response": [
+            {
+              "name": "200 OK — FX Rates",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"rate_as_of\": \"2026-03-10T09:15:00+07:00\",\n    \"source\": \"BLOOMBERG\",\n    \"rates\": [\n      { \"pair\": \"IDR/USD\", \"bid\": 0.0000628, \"ask\": 0.0000632, \"mid_rate\": 0.0000630, \"spread_bps\": 50 },\n      { \"pair\": \"IDR/SGD\", \"bid\": 0.0000843, \"ask\": 0.0000851, \"mid_rate\": 0.0000847, \"spread_bps\": 75 },\n      { \"pair\": \"IDR/MYR\", \"bid\": 0.000296, \"ask\": 0.000300, \"mid_rate\": 0.000298, \"spread_bps\": 100 },\n      { \"pair\": \"IDR/CNY\", \"bid\": 0.000459, \"ask\": 0.000463, \"mid_rate\": 0.000461, \"spread_bps\": 75 }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /fx/rate-lock — Lock FX Rate (90s)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Rate lock ID returned', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('rate_lock_id');",
+                  "    pm.collectionVariables.set('rate_lock_id', jsonData.data.rate_lock_id);",
+                  "});",
+                  "",
+                  "pm.test('Lock expires in 90 seconds', function() {",
+                  "    var data = pm.response.json().data;",
+                  "    var lockExpiry = new Date(data.lock_expires_at);",
+                  "    var now = new Date();",
+                  "    var diffSeconds = (lockExpiry - now) / 1000;",
+                  "    pm.expect(diffSeconds).to.be.within(85, 95);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-PSP-ID", "value": "{{psp_id}}" },
+              { "key": "X-Request-ID", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_currency\": \"IDR\",\n  \"destination_currency\": \"SGD\",\n  \"source_amount\": 15000000,\n  \"conversion_mode\": \"SOURCE_FIXED\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/fx/rate-lock",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "fx", "rate-lock"]
+            },
+            "description": "Lock an FX rate for 90 seconds. The rate_lock_id must be included when submitting the cross-border payment. Expired lock_id will result in transaction rejection with FX-002 error."
+          },
+          "response": [
+            {
+              "name": "200 OK — Rate Locked",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"rate_lock_id\": \"RLOCK-20260310-000789\",\n    \"source_currency\": \"IDR\",\n    \"destination_currency\": \"SGD\",\n    \"source_amount\": 15000000,\n    \"destination_amount\": 1270.50,\n    \"applied_rate\": 0.0000847,\n    \"spread_bps\": 75,\n    \"lock_expires_at\": \"2026-03-10T09:16:30+07:00\",\n    \"rate_as_of\": \"2026-03-10T09:15:00+07:00\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /payments/cross-border — Submit Cross-Border Remittance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function() {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "pm.test('Transaction ID returned', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('transaction_id');",
+                  "});",
+                  "",
+                  "pm.test('SWIFT reference in response', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('swift_reference');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Request-ID", "value": "{{$guid}}" },
+              { "key": "X-Idempotency-Key", "value": "IDEM-XBDR-{{$randomUUID}}" },
+              { "key": "X-PSP-ID", "value": "{{psp_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_type\": \"CROSS_BORDER_REMITTANCE\",\n  \"rate_lock_id\": \"{{rate_lock_id}}\",\n  \"sender\": {\n    \"name\": \"Budi Santoso\",\n    \"id_type\": \"KTP\",\n    \"id_number\": \"3271xxxxxxxxxxxxx\",\n    \"address\": \"Jl. Sudirman No. 45, Jakarta Pusat\",\n    \"account_number\": \"1234567890\",\n    \"bank_code\": \"014\"\n  },\n  \"recipient\": {\n    \"name\": \"Tan Wei Ming\",\n    \"address\": \"12 Marina Bay, Singapore 018983\",\n    \"account_number\": \"SGD-ACC-987654321\",\n    \"bank_bic\": \"OCBCSGSG\",\n    \"bank_name\": \"OCBC Bank Singapore\",\n    \"bank_country\": \"SG\"\n  },\n  \"amount\": {\n    \"source_currency\": \"IDR\",\n    \"source_amount\": 15000000,\n    \"destination_currency\": \"SGD\"\n  },\n  \"purpose_of_remittance\": \"FAMILY_SUPPORT\",\n  \"psp_reference\": \"PSP-XBDR-20260310-001\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/payments/cross-border",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "payments", "cross-border"]
+            },
+            "description": "Submit a cross-border remittance using a locked FX rate. rate_lock_id must be valid (not expired). settlement via SWIFT MT103."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. QRIS",
+      "item": [
+        {
+          "name": "POST /qris/generate — Generate QRIS QR Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('QR data string returned', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('qr_string');",
+                  "    pm.expect(jsonData.data.qr_string).to.not.be.empty;",
+                  "});",
+                  "",
+                  "pm.test('QR expiry is in the future', function() {",
+                  "    var expiryStr = pm.response.json().data.qr_expiry;",
+                  "    var expiry = new Date(expiryStr);",
+                  "    pm.expect(expiry > new Date()).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-PSP-ID", "value": "{{psp_id}}" },
+              { "key": "X-Request-ID", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchant_id\": \"MERCHANT-TOKPED-00001\",\n  \"merchant_name\": \"Toko Elektronik Maju\",\n  \"merchant_category_code\": \"5732\",\n  \"terminal_id\": \"TERM-001\",\n  \"transaction_amount\": 75000,\n  \"currency\": \"IDR\",\n  \"invoice_number\": \"INV-20260310-00456\",\n  \"qr_type\": \"DYNAMIC\",\n  \"expiry_minutes\": 15\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/qris/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "qris", "generate"]
+            },
+            "description": "Generate a QRIS dynamic QR code for merchant payment. QR code valid for 15 minutes. qr_string returned is the raw EMVCo QRIS data string for QR code rendering."
+          },
+          "response": [
+            {
+              "name": "200 OK — QRIS Generated",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"qr_reference\": \"QRIS-20260310-000234\",\n    \"merchant_id\": \"MERCHANT-TOKPED-00001\",\n    \"transaction_amount\": 75000,\n    \"qr_string\": \"00020101021226590014ID.CO.QRIS.WWW011893600914030000000030240210MERCHANT010204BIPAY5204573253033605802ID5920Toko Elektronik Maju6013Jakarta Pusat61051203062070703A016304A9B2\",\n    \"qr_expiry\": \"2026-03-10T09:30:00+07:00\",\n    \"deep_link_url\": \"https://qris.bipay.bankid.go.id/pay?ref=QRIS-20260310-000234\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Settlement",
+      "item": [
+        {
+          "name": "GET /settlement/summary — Daily Settlement Summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Settlement date matches query param', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.settlement_date).to.eql('2026-03-10');",
+                  "});",
+                  "",
+                  "pm.test('Net settlement amount is non-negative', function() {",
+                  "    var amount = pm.response.json().data.net_settlement_idr;",
+                  "    pm.expect(amount).to.be.at.least(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+            },
+            "method": "GET",
+            "header": [{ "key": "X-PSP-ID", "value": "{{psp_id}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/{{api_version}}/settlement/summary?date=2026-03-10&psp_id={{psp_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "{{api_version}}", "settlement", "summary"],
+              "query": [
+                { "key": "date", "value": "2026-03-10", "description": "Settlement date YYYY-MM-DD" },
+                { "key": "psp_id", "value": "{{psp_id}}" }
+              ]
+            },
+            "description": "Retrieve daily settlement summary for a PSP. Includes gross inflows, outflows, fees, and net settlement amount."
+          },
+          "response": [
+            {
+              "name": "200 OK — Settlement Summary",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"settlement_date\": \"2026-03-10\",\n    \"psp_id\": \"PSP-001-DANA\",\n    \"currency\": \"IDR\",\n    \"gross_inflow\": 48750000000,\n    \"gross_outflow\": 47230000000,\n    \"transaction_fees\": 145000000,\n    \"net_settlement_idr\": 1375000000,\n    \"transaction_count\": 245678,\n    \"settlement_windows\": [\n      { \"window\": \"10:00\", \"status\": \"SETTLED\", \"amount\": 18420000000 },\n      { \"window\": \"14:00\", \"status\": \"SETTLED\", \"amount\": 15790000000 },\n      { \"window\": \"17:30\", \"status\": \"PENDING\", \"amount\": 12395000000 }\n    ]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Global pre-request: add correlation ID to all requests",
+          "pm.request.headers.add({ key: 'X-Correlation-ID', value: pm.variables.replaceIn('{{$guid}}') });"
+        ],
+        "type": "text/javascript"
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "// Global test: log response time",
+          "console.log('[' + pm.info.requestName + '] Response time: ' + pm.response.responseTime + 'ms');",
+          "",
+          "// Global test: check for internal server errors",
+          "pm.test('No 5xx server error', function() {",
+          "    pm.expect(pm.response.code).to.not.be.within(500, 599);",
+          "});"
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ]
+}

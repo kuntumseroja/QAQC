@@ -1,0 +1,16 @@
+psp_id,psp_name,license_number,business_type,status,onboarded_date,tier,daily_limit_idr,contact_email,notes
+PSP-001,PT Dana Internasional Indonesia,BI-PSP-2019-0041,E_MONEY,Active,2019-08-15,1,10000000000,compliance@dana.id,Largest e-money PSP by volume
+PSP-002,PT OVO Finance Indonesia,BI-PSP-2019-0038,E_MONEY,Active,2019-06-20,1,10000000000,ops@ovo.id,Tier 1 strategic partner
+PSP-003,PT GoPay Fintech Solutions,BI-PSP-2019-0022,E_MONEY,Active,2019-03-10,1,10000000000,bipay-ops@gojek.com,High volume merchant payments
+PSP-004,PT ShopeePay Indonesia,BI-PSP-2020-0055,E_MONEY,Active,2020-04-01,1,10000000000,,Missing contact email - data quality issue
+PSP-005,PT LinkAja Fintech,BI-PSP-2019-0051,E_MONEY,Active,2019-10-22,1,10000000000,partner@linkaja.co.id,State-owned consortium PSP
+PSP-006,PT Akulaku Finance Indonesia,BI-PSP-2021-0089,PAYMENT_GATEWAY,Active,2021-02-28,2,1000000000,compliance@akulaku.com,Buy now pay later gateway
+PSP-007,PT Kredivo Multifinance,BI-PSP-2021-0041,PAYMENT_GATEWAY,Active,2021-07-14,2,1000000000,bipay@kredivo.com,BNPL payment integrator
+PSP-008,PT iPaymu Digital Payment,BI-PSP-2020-0033,PAYMENT_GATEWAY,Active,2020-09-05,2,1000000000,tech@ipaymu.com,SME-focused payment gateway
+PSP-009,PT Midtrans Payment,BI-PSP-2018-0017,PAYMENT_GATEWAY,Active,2018-11-30,2,1000000000,compliance@midtrans.com,Acquired by GoTo Group 2022
+PSP-010,PT Xendit Indonesia,BI-PSP-2019-0044,PAYMENT_GATEWAY,Active,2019-09-18,2,1000000000,ops-id@xendit.co,Southeast Asia payment infrastructure
+PSP-011,PT Finpay Money,BI-PSP-2020-0072,E_MONEY,Suspended,2020-12-10,2,1000000000,finpay@telkom.co.id,Suspended pending compliance review - 2026-01-15
+PSP-012,PT BayarInd Digital,BI-PSP-2022-0041,PAYMENT_GATEWAY,Active,32-13-2022,3,100000000,admin@bayarind.co.id,Invalid onboarded_date - data quality issue
+PSP-013,PT Nusa Payment Indonesia,BI-PSP-2021-0041,E_MONEY,Active,2021-11-08,3,100000000,info@nusapay.id,Duplicate license number with PSP-007 - data quality issue
+PSP-014,PT RajaPayment Nusantara,BI-PSP-2023-0018,PAYMENT_GATEWAY,Probation,2023-05-22,3,100000000,,Missing contact email - on probation for late reporting
+PSP-015,PT Bayar Digital Mandiri,BI-PSP-2022-0097,E_MONEY,Inactive,2022-08-30,3,100000000,ops@bayardigital.co.id,Voluntary inactive - ceased operations 2025-06-01

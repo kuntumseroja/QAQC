@@ -1,0 +1,58 @@
+ETL PIPELINE VALIDATION - Source and Target Queries
+Pipeline: PSP Transaction Data Warehouse ETL
+Schedule: Daily at 02:00 WIB
+
+SOURCE QUERIES (PostgreSQL - OLTP):
+
+-- Row count
+SELECT COUNT(*) as total_rows FROM transactions WHERE DATE(created_at) = '2026-04-01';
+
+-- Sum of amounts by currency
+SELECT currency, SUM(amount) as total_amount, COUNT(*) as tx_count
+FROM transactions
+WHERE DATE(created_at) = '2026-04-01'
+GROUP BY currency;
+
+-- Status distribution
+SELECT status, COUNT(*) as count
+FROM transactions
+WHERE DATE(created_at) = '2026-04-01'
+GROUP BY status;
+
+-- PSP transaction counts
+SELECT psp_id, COUNT(*) as tx_count, SUM(amount) as total_amount
+FROM transactions
+WHERE DATE(created_at) = '2026-04-01'
+GROUP BY psp_id;
+
+
+TARGET QUERIES (Data Warehouse - Redshift):
+
+-- Row count
+SELECT COUNT(*) as total_rows FROM dwh.fact_transactions WHERE tx_date = '2026-04-01';
+
+-- Sum of amounts by currency
+SELECT currency_code, SUM(amount_local) as total_amount, COUNT(*) as tx_count
+FROM dwh.fact_transactions
+WHERE tx_date = '2026-04-01'
+GROUP BY currency_code;
+
+-- Status distribution
+SELECT tx_status, COUNT(*) as count
+FROM dwh.fact_transactions
+WHERE tx_date = '2026-04-01'
+GROUP BY tx_status;
+
+-- PSP transaction counts
+SELECT psp_dim_id, COUNT(*) as tx_count, SUM(amount_local) as total_amount
+FROM dwh.fact_transactions
+WHERE tx_date = '2026-04-01'
+GROUP BY psp_dim_id;
+
+
+TRANSFORMATION SPEC:
+- Source transactions.currency -> Target fact_transactions.currency_code (direct map)
+- Source transactions.amount -> Target fact_transactions.amount_local (convert non-IDR to IDR using dim_fx_rates)
+- Source transactions.psp_id -> Target fact_transactions.psp_dim_id (lookup from dim_psp)
+- Source transactions.status -> Target fact_transactions.tx_status (map: COMPLETED->SUCCESS, FAILED->FAILURE, REVERSED->REVERSAL)
+- Exclude: transactions with status IN ('INITIATED', 'PROCESSING') - only settled/final states

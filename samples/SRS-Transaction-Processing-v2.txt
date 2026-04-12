@@ -1,0 +1,113 @@
+SOFTWARE REQUIREMENTS SPECIFICATION
+Bank Indonesia - Real-Time Transaction Processing Engine
+Version 2.0 | March 2026
+
+1. PURPOSE
+This SRS defines the software requirements for the real-time transaction processing
+engine within the BI-FAST payment rail infrastructure.
+
+2. FUNCTIONAL REQUIREMENTS
+
+FR-001: Transaction Initiation
+The system shall accept payment transactions via REST API with the following payload:
+- sender_account (VARCHAR 20, mandatory)
+- receiver_account (VARCHAR 20, mandatory)
+- amount (DECIMAL 18,2, mandatory, range: 1.00 - 999,999,999.99)
+- currency (CHAR 3, mandatory, supported: IDR, USD, SGD, MYR)
+- reference_number (VARCHAR 35, mandatory, unique per PSP per day)
+- transaction_type (ENUM: credit_transfer, direct_debit, bulk_payment)
+- purpose_code (VARCHAR 4, as per BI transaction purpose codes)
+Response time: < 200ms for acknowledgment
+
+FR-002: Transaction Validation
+The system shall validate each transaction against:
+- Sender account existence and active status
+- Receiver account existence and reachability
+- Sufficient balance (real-time balance check)
+- Transaction limits (per-transaction, daily, monthly per PSP)
+- Duplicate detection (reference_number + sender within 24 hours)
+- Sanction list screening (OFAC, UN, PPATK)
+Validation must complete within 500ms
+
+FR-003: Transaction Routing
+The system shall route transactions based on:
+- Receiver institution routing table
+- Preferred clearing channel (BI-FAST, RTGS, SKN)
+- Amount-based routing (> 1B IDR routes to RTGS)
+- Time-based routing (outside RTGS hours routes to BI-FAST)
+- Fallback routing on primary channel failure
+
+FR-004: Settlement Processing
+The system shall perform real-time gross settlement for each transaction:
+- Debit sender institution settlement account
+- Credit receiver institution settlement account
+- Generate settlement confirmation message (ISO 20022 pacs.002)
+- Update position and liquidity monitors
+Settlement must complete within 3 seconds
+
+FR-005: Transaction Status Management
+Transaction lifecycle states:
+INITIATED -> VALIDATED -> ROUTED -> PROCESSING -> SETTLED -> COMPLETED
+                      -> REJECTED (with reason code)
+                      -> FAILED (with error code, eligible for retry)
+                      -> REVERSED (on timeout or explicit reversal)
+                      -> TIMED_OUT (after 30 seconds without settlement)
+
+FR-006: Reconciliation
+The system shall perform automated reconciliation:
+- Real-time: Transaction-level matching between sender and receiver
+- End-of-day: Aggregate position reconciliation per institution
+- T+1: Final settlement reconciliation with central bank ledger
+Discrepancies must trigger alerts within 5 minutes of detection
+
+FR-007: Rate Limiting
+Per-PSP rate limits:
+- Tier 1 PSPs (major banks): 10,000 TPS
+- Tier 2 PSPs (medium banks): 5,000 TPS
+- Tier 3 PSPs (non-bank): 1,000 TPS
+- Tier 4 PSPs (new entrants): 100 TPS
+Rate limit exceeded returns HTTP 429 with retry-after header
+
+FR-008: Idempotency
+The system shall support idempotent transaction submission:
+- Same reference_number + sender within 24h returns original result
+- Idempotency key stored in Redis with 24h TTL
+- Prevents duplicate processing on network retries
+
+3. PERFORMANCE REQUIREMENTS
+
+PR-001: Throughput: 50,000 transactions per second (peak)
+PR-002: Latency: P95 < 500ms end-to-end, P99 < 1000ms
+PR-003: Availability: 99.99% uptime (52 minutes downtime per year max)
+PR-004: Data durability: Zero data loss (synchronous replication)
+PR-005: Burst capacity: Handle 3x normal load for 15 minutes
+
+4. API SPECIFICATION
+
+POST /api/v1/transactions
+Headers: X-PSP-ID, X-API-Key, X-Idempotency-Key, Content-Type: application/json
+Request Body:
+{
+  "sender_account": "1234567890",
+  "receiver_account": "0987654321",
+  "amount": 1500000.00,
+  "currency": "IDR",
+  "reference_number": "PSP001-20260410-00001",
+  "transaction_type": "credit_transfer",
+  "purpose_code": "SALA"
+}
+Response 200:
+{
+  "transaction_id": "TXN-2026-04-10-UUID",
+  "status": "VALIDATED",
+  "timestamp": "2026-04-10T10:30:00.123Z"
+}
+
+GET /api/v1/transactions/{transaction_id}
+Returns full transaction detail with current status
+
+POST /api/v1/transactions/{transaction_id}/reverse
+Initiates reversal for a completed transaction
+
+GET /api/v1/reconciliation/daily?date=2026-04-10
+Returns daily reconciliation summary

@@ -1,0 +1,156 @@
+{
+  "framework": "CIS AWS Foundations Benchmark v1.5.0",
+  "account_id": "123456789012",
+  "region": "ap-southeast-1",
+  "scan_date": "2026-04-10T06:00:00Z",
+  "scan_duration_seconds": 847,
+  "findings": [
+    {
+      "control_id": "CIS 1.1",
+      "title": "Maintain current contact details",
+      "severity": "Medium",
+      "status": "PASS",
+      "resource": "AWS Account 123456789012",
+      "details": "Account contact details are up to date"
+    },
+    {
+      "control_id": "CIS 1.4",
+      "title": "Ensure no root account access key exists",
+      "severity": "Critical",
+      "status": "PASS",
+      "resource": "Root Account",
+      "details": "No access keys found for root account"
+    },
+    {
+      "control_id": "CIS 1.5",
+      "title": "Ensure MFA is enabled for root account",
+      "severity": "Critical",
+      "status": "PASS",
+      "resource": "Root Account",
+      "details": "Virtual MFA device is enabled"
+    },
+    {
+      "control_id": "CIS 1.8",
+      "title": "Ensure IAM password policy requires minimum length of 14",
+      "severity": "Medium",
+      "status": "FAIL",
+      "resource": "IAM Password Policy",
+      "details": "Current minimum length is 8, should be 14",
+      "remediation": "Update IAM password policy: aws iam update-account-password-policy --minimum-password-length 14"
+    },
+    {
+      "control_id": "CIS 1.10",
+      "title": "Ensure multi-factor authentication is enabled for all IAM users with console access",
+      "severity": "High",
+      "status": "FAIL",
+      "resource": "IAM Users: svc-payment, svc-etl, dev-ops-user",
+      "details": "3 IAM users with console access do not have MFA enabled",
+      "remediation": "Enable MFA for users: svc-payment, svc-etl, dev-ops-user. Use virtual MFA or hardware MFA device."
+    },
+    {
+      "control_id": "CIS 1.14",
+      "title": "Ensure access keys are rotated every 90 days or less",
+      "severity": "Medium",
+      "status": "FAIL",
+      "resource": "IAM Users: svc-payment (key age: 147 days), svc-etl (key age: 203 days)",
+      "details": "2 access keys are older than 90 days",
+      "remediation": "Rotate access keys: 1) Create new key, 2) Update applications, 3) Deactivate old key, 4) Delete old key after verification"
+    },
+    {
+      "control_id": "CIS 2.1.1",
+      "title": "Ensure S3 bucket versioning is enabled",
+      "severity": "Low",
+      "status": "FAIL",
+      "resource": "s3://bi-payment-transaction-logs",
+      "details": "Versioning is not enabled on bucket bi-payment-transaction-logs",
+      "remediation": "aws s3api put-bucket-versioning --bucket bi-payment-transaction-logs --versioning-configuration Status=Enabled"
+    },
+    {
+      "control_id": "CIS 2.1.2",
+      "title": "Ensure S3 bucket has server-side encryption enabled",
+      "severity": "High",
+      "status": "FAIL",
+      "resource": "s3://bi-payment-transaction-logs",
+      "details": "Default encryption not configured",
+      "remediation": "Enable SSE-S3 or SSE-KMS encryption on the bucket"
+    },
+    {
+      "control_id": "CIS 2.2.1",
+      "title": "Ensure EBS volume encryption is enabled by default",
+      "severity": "Medium",
+      "status": "FAIL",
+      "resource": "Region: ap-southeast-1",
+      "details": "EBS encryption by default is not enabled in this region",
+      "remediation": "aws ec2 enable-ebs-encryption-by-default --region ap-southeast-1"
+    },
+    {
+      "control_id": "CIS 2.3.1",
+      "title": "Ensure RDS instances are encrypted",
+      "severity": "High",
+      "status": "FAIL",
+      "resource": "RDS: bi-payment-db",
+      "details": "RDS instance bi-payment-db does not have encryption at rest enabled",
+      "remediation": "Create encrypted snapshot, restore from encrypted snapshot, update DNS/connection strings"
+    },
+    {
+      "control_id": "CIS 3.1",
+      "title": "Ensure CloudTrail is enabled in all regions",
+      "severity": "High",
+      "status": "PASS",
+      "resource": "CloudTrail: bi-audit-trail",
+      "details": "Multi-region trail is active"
+    },
+    {
+      "control_id": "CIS 3.4",
+      "title": "Ensure CloudTrail log file validation is enabled",
+      "severity": "Medium",
+      "status": "PASS",
+      "resource": "CloudTrail: bi-audit-trail",
+      "details": "Log file validation is enabled"
+    },
+    {
+      "control_id": "CIS 4.1",
+      "title": "Ensure no security groups allow ingress from 0.0.0.0/0 to port 22",
+      "severity": "Critical",
+      "status": "FAIL",
+      "resource": "SecurityGroup: sg-0abc123 (payment-app-sg)",
+      "details": "Security group allows SSH (port 22) from 0.0.0.0/0",
+      "remediation": "Restrict SSH access to specific CIDR ranges (e.g., VPN: 10.0.0.0/8) or use SSM Session Manager"
+    },
+    {
+      "control_id": "CIS 4.2",
+      "title": "Ensure no security groups allow ingress from 0.0.0.0/0 to port 3389",
+      "severity": "Critical",
+      "status": "PASS",
+      "resource": "All Security Groups",
+      "details": "No security groups allow RDP from any source"
+    },
+    {
+      "control_id": "CIS 5.1",
+      "title": "Ensure VPC flow logging is enabled in all VPCs",
+      "severity": "Medium",
+      "status": "FAIL",
+      "resource": "VPC: vpc-0xyz789 (bi-payment-vpc)",
+      "details": "Flow logging is not enabled for VPC bi-payment-vpc",
+      "remediation": "aws ec2 create-flow-logs --resource-type VPC --resource-ids vpc-0xyz789 --traffic-type ALL --log-destination-type cloud-watch-logs"
+    },
+    {
+      "control_id": "CIS 5.3",
+      "title": "Ensure routing tables for VPC peering are least access",
+      "severity": "Medium",
+      "status": "PASS",
+      "resource": "VPC Peering Connections",
+      "details": "No overly permissive peering routes found"
+    }
+  ],
+  "summary": {
+    "total_checks": 16,
+    "passed": 8,
+    "failed": 8,
+    "compliance_percentage": 50.0,
+    "critical_findings": 1,
+    "high_findings": 3,
+    "medium_findings": 3,
+    "low_findings": 1
+  }
+}

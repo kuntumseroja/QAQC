@@ -1,0 +1,173 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Bank Indonesia Payment API",
+    "description": "BI-FAST Real-Time Payment Processing API",
+    "version": "2.0.0",
+    "contact": {
+      "name": "BI Payment Infrastructure Team",
+      "email": "payment-infra@bi.go.id"
+    }
+  },
+  "servers": [
+    { "url": "https://api.bi.go.id/v1", "description": "Production" },
+    { "url": "https://sandbox.bi.go.id/v1", "description": "Sandbox" }
+  ],
+  "paths": {
+    "/transactions": {
+      "post": {
+        "summary": "Create Payment Transaction",
+        "operationId": "createTransaction",
+        "tags": ["Transactions"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TransactionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transaction accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TransactionResponse" }
+              }
+            }
+          },
+          "400": { "description": "Validation error" },
+          "429": { "description": "Rate limit exceeded" }
+        }
+      },
+      "get": {
+        "summary": "List Transactions",
+        "operationId": "listTransactions",
+        "tags": ["Transactions"],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["INITIATED","VALIDATED","SETTLED","COMPLETED","REJECTED","FAILED"] } },
+          { "name": "date_from", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "date_to", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 200 } }
+        ],
+        "responses": {
+          "200": { "description": "Transaction list" }
+        }
+      }
+    },
+    "/transactions/{transactionId}": {
+      "get": {
+        "summary": "Get Transaction Detail",
+        "operationId": "getTransaction",
+        "tags": ["Transactions"],
+        "parameters": [
+          { "name": "transactionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Transaction detail" },
+          "404": { "description": "Transaction not found" }
+        }
+      }
+    },
+    "/transactions/{transactionId}/reverse": {
+      "post": {
+        "summary": "Reverse Transaction",
+        "operationId": "reverseTransaction",
+        "tags": ["Transactions"],
+        "parameters": [
+          { "name": "transactionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": { "type": "string" },
+                  "reason_code": { "type": "string", "enum": ["TECH_ERROR", "FRAUD", "DUPLICATE", "CUSTOMER_REQUEST"] }
+                },
+                "required": ["reason", "reason_code"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Reversal initiated" }
+        }
+      }
+    },
+    "/reconciliation/daily": {
+      "get": {
+        "summary": "Daily Reconciliation Report",
+        "operationId": "getDailyReconciliation",
+        "tags": ["Reconciliation"],
+        "parameters": [
+          { "name": "date", "in": "query", "required": true, "schema": { "type": "string", "format": "date" } }
+        ],
+        "responses": {
+          "200": { "description": "Reconciliation summary" }
+        }
+      }
+    },
+    "/psp/{pspId}/limits": {
+      "get": {
+        "summary": "Get PSP Rate Limits",
+        "operationId": "getPspLimits",
+        "tags": ["PSP Management"],
+        "parameters": [
+          { "name": "pspId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Current rate limit status" }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "healthCheck",
+        "tags": ["System"],
+        "responses": {
+          "200": { "description": "System healthy" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TransactionRequest": {
+        "type": "object",
+        "required": ["sender_account", "receiver_account", "amount", "currency", "reference_number", "transaction_type"],
+        "properties": {
+          "sender_account": { "type": "string", "maxLength": 20 },
+          "receiver_account": { "type": "string", "maxLength": 20 },
+          "amount": { "type": "number", "minimum": 1, "maximum": 999999999.99 },
+          "currency": { "type": "string", "enum": ["IDR", "USD", "SGD", "MYR"] },
+          "reference_number": { "type": "string", "maxLength": 35 },
+          "transaction_type": { "type": "string", "enum": ["credit_transfer", "direct_debit", "bulk_payment"] },
+          "purpose_code": { "type": "string", "maxLength": 4 },
+          "sender_name": { "type": "string" },
+          "receiver_name": { "type": "string" },
+          "remittance_info": { "type": "string", "maxLength": 140 }
+        }
+      },
+      "TransactionResponse": {
+        "type": "object",
+        "properties": {
+          "transaction_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["INITIATED", "VALIDATED", "ROUTED", "PROCESSING", "SETTLED", "COMPLETED", "REJECTED", "FAILED"] },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "settlement_reference": { "type": "string" }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  }
+}

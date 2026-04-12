@@ -1,0 +1,49 @@
+ARCHITECTURE DESCRIPTION - Bank Indonesia Payment Infrastructure
+For DR/HA Test Scenario Generation
+
+INFRASTRUCTURE OVERVIEW:
+- Primary Region: ap-southeast-1 (Singapore)
+- DR Region: ap-southeast-3 (Jakarta)
+- Deployment: AWS Cloud (dedicated tenancy)
+- Network: Direct Connect to BI on-premises data center
+
+COMPUTE LAYER:
+- Application: 4x c6i.2xlarge EC2 instances behind ALB (Auto Scaling Group: min=4, max=12)
+- API Gateway: Amazon API Gateway with WAF
+- Container Platform: EKS cluster (3 worker nodes, m6i.xlarge)
+- Microservices: 8 services deployed as Kubernetes pods
+
+DATABASE LAYER:
+- Primary DB: Amazon RDS PostgreSQL 15.4 Multi-AZ (db.r6g.xlarge)
+- Read Replicas: 2 in primary region, 1 cross-region replica in ap-southeast-3
+- Redis Cache: ElastiCache Redis 7.0, 3-node cluster with automatic failover
+- Elasticsearch: 3-node cluster for transaction search and defect indexing
+
+MESSAGE QUEUE:
+- Amazon MSK (Managed Kafka): 3 brokers, 6 partitions per topic
+- Topics: transaction.initiated, transaction.settled, transaction.failed, reconciliation.daily
+
+STORAGE:
+- S3: Transaction logs, audit trails, report storage (cross-region replication enabled)
+- EBS: gp3 volumes for application data (encrypted with KMS)
+
+MONITORING:
+- CloudWatch: Metrics, alarms, dashboards
+- Grafana: Custom dashboards at grafana.internal/d/payment-ops
+- PagerDuty: On-call alerting for P1/P2 incidents
+
+RPO/RTO TARGETS:
+- Tier 1 (Transaction Processing): RPO = 0 min, RTO = 5 min
+- Tier 2 (Reconciliation, Reporting): RPO = 15 min, RTO = 30 min
+- Tier 3 (Admin Portal, Dashboards): RPO = 1 hour, RTO = 2 hours
+
+BACKUP CONFIGURATION:
+- RDS: Automated backups every 6 hours, retained 35 days
+- S3: Cross-region replication to ap-southeast-3
+- EBS: Daily snapshots, retained 30 days
+- Kafka: Topic replication factor = 3
+
+KNOWN SINGLE POINTS OF FAILURE:
+- API Gateway endpoint (mitigated by Route 53 health checks)
+- KMS key in primary region (cross-region key replication pending)
+- Direct Connect link (backup VPN configured but untested)

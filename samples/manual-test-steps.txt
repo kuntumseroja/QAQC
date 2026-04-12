@@ -1,0 +1,103 @@
+MANUAL TEST SCENARIOS - PSP Payment Portal
+Module: Payment Initiation
+Tester: Senior QA Engineer
+Date: April 2026
+
+TEST CASE TC-PAY-001: Single Payment - Happy Path
+Precondition: User logged in as PSP operator, sender account has sufficient balance
+Steps:
+1. Navigate to Payment > New Payment
+2. Select transaction type "Credit Transfer"
+3. Enter sender account: 1234567890
+4. Enter receiver account: 0987654321
+5. Enter amount: 500,000.00
+6. Select currency: IDR
+7. Enter purpose: Salary Payment
+8. Click "Submit Payment"
+9. Verify confirmation dialog shows correct details
+10. Click "Confirm"
+11. Verify success message with transaction ID
+12. Navigate to Payment > Transaction History
+13. Verify new transaction appears with status "COMPLETED"
+Expected: Payment processed successfully, balance deducted, receipt generated
+
+TEST CASE TC-PAY-002: Payment with Insufficient Balance
+Precondition: Sender account balance is 100,000 IDR
+Steps:
+1. Navigate to Payment > New Payment
+2. Select "Credit Transfer"
+3. Enter sender account with low balance
+4. Enter amount: 500,000.00 (exceeds balance)
+5. Click "Submit Payment"
+6. Verify error message: "Insufficient balance"
+7. Verify no deduction from sender account
+Expected: Transaction rejected with clear error, no money deducted
+
+TEST CASE TC-PAY-003: Duplicate Transaction Detection
+Precondition: Previous transaction with ref PSP001-20260410-00001 exists
+Steps:
+1. Navigate to Payment > New Payment
+2. Enter same reference_number as existing transaction
+3. Enter same sender and receiver accounts
+4. Enter same amount
+5. Click "Submit Payment"
+6. Verify system detects duplicate
+7. Verify original transaction details are shown
+Expected: Duplicate detected, original transaction returned (idempotent)
+
+TEST CASE TC-PAY-004: Multi-Currency Transfer
+Precondition: FX rates configured, sender has IDR account
+Steps:
+1. Navigate to Payment > New Payment
+2. Select "Credit Transfer"
+3. Enter sender account (IDR)
+4. Enter receiver account (USD denominated)
+5. Enter amount: 1,000 USD
+6. Verify FX rate displayed (IDR/USD)
+7. Verify equivalent IDR amount calculated
+8. Click "Submit Payment"
+9. Verify confirmation shows both IDR and USD amounts
+10. Confirm and verify settlement in both currencies
+Expected: Cross-currency payment processed with correct FX conversion
+
+TEST CASE TC-PAY-005: Bulk Payment Upload
+Precondition: CSV file with 50 payment records prepared
+Steps:
+1. Navigate to Payment > Bulk Payment
+2. Click "Upload CSV"
+3. Select file: bulk_payment_50_records.csv
+4. Verify file parsing shows 50 records
+5. Verify validation results (any errors highlighted)
+6. Review summary: total amount, record count
+7. Click "Process Bulk Payment"
+8. Monitor progress bar
+9. Verify completion report: 48 succeeded, 2 failed
+10. Download detailed results CSV
+Expected: Bulk processing completes with accurate status per record
+
+TEST CASE TC-PAY-006: Transaction Reversal
+Precondition: Completed transaction TXN-2026-04-10-XYZ exists
+Steps:
+1. Navigate to Payment > Transaction History
+2. Search for transaction TXN-2026-04-10-XYZ
+3. Click on transaction to view details
+4. Click "Request Reversal"
+5. Select reason: "Customer Request"
+6. Enter justification text
+7. Click "Submit Reversal"
+8. Verify reversal confirmation
+9. Check original transaction status changed to "REVERSED"
+10. Verify funds returned to sender account
+Expected: Reversal processed, original status updated, funds returned
+
+TEST CASE TC-PAY-007: Session Timeout During Payment
+Precondition: Session timeout configured to 15 minutes
+Steps:
+1. Navigate to Payment > New Payment
+2. Fill in all payment details
+3. Wait 16 minutes (session expires)
+4. Click "Submit Payment"
+5. Verify redirect to login page
+6. Verify no partial transaction created
+7. Login again and check no orphaned transaction exists
+Expected: Session expired gracefully, no data loss or orphaned transactions

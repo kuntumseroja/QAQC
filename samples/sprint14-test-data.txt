@@ -1,0 +1,413 @@
+================================================================================
+SPRINT 14 TEST EXECUTION REPORT
+Project: Bank Indonesia National Payment System (BI-PAY)
+Sprint: Sprint 14
+Sprint Duration: 2026-01-07 to 2026-01-20 (2 weeks)
+Report Date: 2026-01-21
+Prepared by: QA Lead — Dewi Rahayu
+Reviewed by: Test Manager — Budi Santoso
+================================================================================
+
+1. SPRINT OVERVIEW
+------------------
+Sprint 14 Goal: Deliver BI-FAST Phase 2 enhancements including bulk payment API,
+  cross-border remittance module, and security hardening per BI Circular SE 22/2025.
+
+Sprint 14 Scope (User Stories):
+  BIP-340: BI-FAST Bulk Payment API (up to 1000 transactions per batch)
+  BIP-341: Cross-border remittance — SGD/MYR corridor
+  BIP-342: mTLS enforcement on all API v2 endpoints (security hardening)
+  BIP-343: QRIS merchant category code validation
+  BIP-344: Settlement reconciliation dashboard widget
+  BIP-345: PSP API key rotation self-service portal
+
+Team Composition:
+  Developers : 6
+  QA Engineers: 3 (Dewi, Ari, Sinta)
+  DevOps      : 1
+  Business Analyst: 1
+
+--------------------------------------------------------------------------------
+
+2. TEST EXECUTION SUMMARY
+--------------------------
+
+2.1 OVERALL TEST CASE STATUS
+------------------------------
+                          Count       Percentage
+  Total Test Cases        :  312        100.0%
+  ─────────────────────────────────────────────
+  Executed                :  298         95.5%
+  Not Executed (Blocked)  :   14          4.5%
+  ─────────────────────────────────────────────
+  PASSED                  :  263         88.3%  (of executed)
+  FAILED                  :   29          9.7%  (of executed)
+  BLOCKED                 :    6          2.0%  (of executed)
+  ─────────────────────────────────────────────
+  Overall Pass Rate        :  84.3%  (passed / total)
+  Execution Rate           :  95.5%  (executed / total)
+
+2.2 TEST CASE DISTRIBUTION BY TYPE
+------------------------------------
+  Functional Tests         : 187 cases  (Passed: 162, Failed: 20, Blocked: 5)
+  Integration Tests        :  58 cases  (Passed:  48, Failed:  7, Blocked: 1)
+  Security Tests           :  27 cases  (Passed:  22, Failed:  5, Blocked: 0)
+  Performance Tests        :  16 cases  (Passed:  13, Failed:  3, Blocked: 0)
+  Regression Tests         :  24 cases  (Passed:  18, Failed:  4, Blocked: 0) [note: not all run]
+
+  Note: 14 regression test cases not executed due to environment instability on
+  Sprint Day 7-8 (UAT environment Redis cluster failure). Blocker resolved Day 9.
+
+2.3 TEST CASE STATUS BY USER STORY
+------------------------------------
+  Story        | Total | Exec | Pass | Fail | Blkd | Pass% | Status
+  ─────────────────────────────────────────────────────────────────────
+  BIP-340      |    89 |   85 |   74 |   10 |    1 | 87.1% | PARTIAL
+  BIP-341      |    62 |   58 |   51 |    6 |    1 | 88.0% | PARTIAL
+  BIP-342      |    41 |   41 |   38 |    3 |    0 | 92.7% | PARTIAL
+  BIP-343      |    38 |   36 |   32 |    4 |    0 | 88.9% | PARTIAL
+  BIP-344      |    44 |   38 |   34 |    4 |    4 | 89.5% | BLOCKED
+  BIP-345      |    38 |   40 |   34 |    2 |    0 | 85.0% | PARTIAL
+  ─────────────────────────────────────────────────────────────────────
+  TOTAL        |   312 |  298 |  263 |   29 |    6 | 84.3% |
+
+  Note: BIP-344 blocked due to dependency on BI analytics DB schema migration
+  that was not completed in this sprint. 4 dashboard widget tests could not run.
+
+--------------------------------------------------------------------------------
+
+3. DEFECT SUMMARY
+------------------
+
+3.1 DEFECTS FOUND THIS SPRINT
+-------------------------------
+  Total Defects Found     : 23
+  ────────────────────────────────────────────────
+  P1 Critical             :  3
+  P2 High                 :  8
+  P3 Medium               :  9
+  P4 Low                  :  3
+
+  By Module:
+    Payment Gateway       :  7  (P1:2, P2:3, P3:2, P4:0)
+    API Gateway (mTLS)    :  4  (P1:1, P2:2, P3:1, P4:0)
+    Transaction Processing:  3  (P1:0, P2:1, P3:1, P4:1)
+    Currency Module       :  4  (P1:0, P2:1, P3:2, P4:1)
+    PSP Onboarding        :  2  (P1:0, P2:1, P3:0, P4:1)
+    Data Pipeline         :  2  (P1:0, P2:0, P3:2, P4:0)
+    Infrastructure        :  1  (P1:0, P2:0, P3:1, P4:0)
+
+3.2 DEFECT LIST (Sprint 14 Findings)
+--------------------------------------
+  Jira ID     | Sev | Module            | Summary
+  ─────────────────────────────────────────────────────────────────────────────
+  BIPAY-1129  | P1  | Currency Module   | CNY conversion rate inverted (Bloomberg feed)
+  BIPAY-1134  | P1  | API Gateway       | mTLS not enforced on /api/v2/rtgs/* endpoints
+  BIPAY-1122  | P1  | Payment Gateway   | QRIS deep link URL points to staging in prod config
+  BIPAY-1131  | P2  | Payment Gateway   | Bulk payment API rejects batch >500 txns (limit bug)
+  BIPAY-1133  | P2  | Payment Gateway   | Bulk payment response missing failed_count field
+  BIPAY-1135  | P2  | API Gateway       | JWT expiry check bypassed for /health endpoint
+  BIPAY-1136  | P2  | API Gateway       | Rate limit not applied per-PSP for bulk endpoint
+  BIPAY-1137  | P2  | Currency Module   | SGD/IDR rate not loaded from Reuters feed
+  BIPAY-1138  | P2  | PSP Onboarding    | API key rotation does not invalidate old key immediately
+  BIPAY-1139  | P2  | Transaction Proc  | Cross-border txn audit trail missing remittance ref
+  BIPAY-1140  | P2  | Payment Gateway   | QRIS MCC validation allows reserved code 0000
+  BIPAY-1141  | P3  | Transaction Proc  | SKNBI batch window boundary off-by-one (millisecond)
+  BIPAY-1142  | P3  | Payment Gateway   | Bulk payment dry-run mode does not validate FX amounts
+  BIPAY-1143  | P3  | Payment Gateway   | Error message for oversized batch exposes array length
+  BIPAY-1144  | P3  | API Gateway       | CORS header missing for new BI portal domain
+  BIPAY-1145  | P3  | Currency Module   | JPY cross-rate formula uses wrong pair direction
+  BIPAY-1146  | P3  | Currency Module   | MYR rate missing from rate table on first startup
+  BIPAY-1147  | P3  | Data Pipeline     | ETL job hangs on DB connection drop mid-query
+  BIPAY-1148  | P3  | Data Pipeline     | Prometheus scrape interval gaps causing noisy alerts
+  BIPAY-1149  | P3  | Infrastructure    | Prometheus false alerts on metric scrape gaps
+  BIPAY-1150  | P4  | Transaction Proc  | SKNBI log format uses non-standard timestamp format
+  BIPAY-1151  | P4  | Currency Module   | EUR/IDR weekend rate has no audit trail log entry
+  BIPAY-1152  | P4  | PSP Onboarding    | API key display masks too many characters in UI
+  ─────────────────────────────────────────────────────────────────────────────
+
+3.3 DEFECT RESOLUTION STATUS
+------------------------------
+  Total Found This Sprint  : 23
+  ──────────────────────────────────────────────────────────
+  Resolved & Verified      : 17  (73.9%)
+  Resolved, Pending Verify :  3  (13.0%)
+  Open / In Progress       :  2   (8.7%)
+  Deferred to Sprint 15    :  1   (4.3%)
+  ──────────────────────────────────────────────────────────
+
+  Carryover from Sprint 13 Resolved in Sprint 14:
+    BIPAY-1108  | P1 | Settlement NUMERIC overflow — CLOSED
+    BIPAY-1115  | P2 | ETL duplicate rows — CLOSED
+    BIPAY-1102  | P3 | PSP duplicate approval email — CLOSED
+
+  Defects Deferred to Sprint 15:
+    BIPAY-1152  | P4 | API key masking cosmetic — low priority; deferred
+
+3.4 DEFECT DENSITY
+-------------------
+  Stories Completed (fully):   3 out of 6
+  Stories Partially Done:      2 out of 6
+  Stories Blocked:             1 out of 6
+
+  Defect Density (by story):
+    BIP-340 (Bulk Payment)      : 10 defects / 89 test cases = 11.2% defect rate
+    BIP-341 (Cross-border)      :  6 defects / 62 test cases =  9.7% defect rate
+    BIP-342 (mTLS Security)     :  4 defects / 41 test cases =  9.8% defect rate
+    BIP-343 (QRIS MCC)          :  4 defects / 38 test cases = 10.5% defect rate
+    BIP-344 (Dashboard Widget)  :  0 defects /  0 tests run  =   N/A (blocked)
+    BIP-345 (API Key Rotation)  :  2 defects / 40 test cases =  5.0% defect rate
+
+--------------------------------------------------------------------------------
+
+4. TEST COVERAGE ANALYSIS
+--------------------------
+
+4.1 REQUIREMENTS COVERAGE
+---------------------------
+  Total Business Requirements (from BRD/SRS)  : 147
+  Requirements with Test Cases                : 138  (93.9%)
+  Requirements without Test Cases             :   9   (6.1%)
+
+  Uncovered Requirements (traceability gap):
+    REQ-BIP340-012: Bulk payment async callback retry logic (3 retries)
+    REQ-BIP340-015: Bulk payment maximum single transaction amount limit
+    REQ-BIP341-008: Cross-border transaction regulatory reporting to BI
+    REQ-BIP342-005: Certificate revocation check (OCSP)
+    REQ-BIP343-009: MCC code lookup from ISO 18245 registry (external)
+    REQ-BIP344-001 to REQ-BIP344-004: All dashboard widget requirements (blocked)
+    REQ-BIP345-007: API key rotation notification email to PSP admin
+
+  Action: Uncovered requirements added to Sprint 15 test planning backlog
+
+4.2 CODE COVERAGE (Unit Tests — from SonarQube)
+-------------------------------------------------
+  Module                    | Line Coverage | Branch Coverage | Condition
+  ──────────────────────────────────────────────────────────────────────────
+  payment-gateway-svc       |    78.4%      |    71.2%        | BELOW TARGET
+  transaction-processor-svc |    83.1%      |    79.6%        | BELOW TARGET
+  currency-module-svc       |    91.2%      |    88.4%        | MEETS TARGET
+  api-gateway-svc           |    85.7%      |    83.1%        | MEETS TARGET
+  psp-onboarding-svc        |    87.3%      |    84.9%        | MEETS TARGET
+  data-pipeline-jobs        |    72.1%      |    65.3%        | BELOW TARGET
+  analytics-dashboard-api   |    68.9%      |    62.7%        | BELOW TARGET
+  ──────────────────────────────────────────────────────────────────────────
+  OVERALL (weighted avg)    |    81.0%      |    77.3%        | BELOW TARGET
+  Coverage Target            |    80.0%      |    80.0%        |
+  ──────────────────────────────────────────────────────────────────────────
+
+  Modules Below Branch Coverage Target:
+    - payment-gateway-svc: bulk payment error paths not unit-tested
+    - transaction-processor-svc: ISO 8583 edge cases missing
+    - data-pipeline-jobs: Spark partition handling paths not covered
+    - analytics-dashboard-api: aggregation query corner cases missing
+
+4.3 API TEST COVERAGE (Postman/RestAssured)
+--------------------------------------------
+  Total API Endpoints        : 47
+  Endpoints with Tests       : 42  (89.4%)
+  Untested Endpoints         :  5  (10.6%)
+    - POST /api/v2/bulk-payment/validate (dry-run) — tests added Sprint 15
+    - GET  /api/v2/remittance/corridors — stub only, no assertion
+    - POST /api/v2/psp/api-keys/rotate — partial coverage
+    - GET  /api/v1/dashboard/widget/settlement — blocked (schema not ready)
+    - GET  /api/v1/health/detailed — security concern, intentionally limited
+
+--------------------------------------------------------------------------------
+
+5. PERFORMANCE TEST RESULTS
+-----------------------------
+
+5.1 PERFORMANCE TEST SCENARIOS EXECUTED
+-----------------------------------------
+  Scenario ID  | Description                              | Tool   | Status
+  ─────────────────────────────────────────────────────────────────────────
+  PERF-014-01  | BI-FAST single txn: 1000 VU steady state | JMeter | PASSED
+  PERF-014-02  | BI-FAST: peak 2000 VU (3-min spike)      | JMeter | PASSED
+  PERF-014-03  | Bulk Payment: 100 batches x 1000 txns    | JMeter | FAILED
+  PERF-014-04  | Cross-border SGD/IDR: 200 VU steady      | JMeter | PASSED
+  PERF-014-05  | API Gateway: 5000 req/s throughput       | k6     | PASSED
+  PERF-014-06  | mTLS handshake: 1000 concurrent TLS      | k6     | FAILED
+  PERF-014-07  | Soak test: 70% load for 6 hours          | JMeter | FAILED
+  PERF-014-08  | Database: 500 concurrent read queries    | pgbench| PASSED
+
+5.2 PERFORMANCE SLA RESULTS — DETAIL
+--------------------------------------
+  Metric                         | SLA Target    | Actual         | Result
+  ──────────────────────────────────────────────────────────────────────────
+  BI-FAST Single Txn P95 Latency | ≤ 1000ms      | 487ms          | PASS
+  BI-FAST Single Txn P99 Latency | ≤ 2000ms      | 893ms          | PASS
+  BI-FAST Throughput (steady)    | ≥ 2000 TPS    | 2,847 TPS      | PASS
+  BI-FAST Error Rate             | ≤ 0.1%        | 0.03%          | PASS
+  Bulk Payment API P95 Latency   | ≤ 5000ms      | 8,241ms        | FAIL
+  Bulk Payment Throughput        | ≥ 50 batches/s| 31 batches/s   | FAIL
+  Cross-border P95 Latency       | ≤ 3000ms      | 2,109ms        | PASS
+  API Gateway Throughput         | ≥ 5000 req/s  | 5,723 req/s    | PASS
+  mTLS Handshake P95 Time        | ≤ 200ms       | 312ms          | FAIL
+  DB Read Query P95 Time         | ≤ 500ms       | 223ms          | PASS
+  System Availability (test env) | ≥ 99.5%       | 99.1%          | FAIL
+  ──────────────────────────────────────────────────────────────────────────
+  SLAs Met: 7 / 11  (63.6%)
+  SLAs Failed: 4 / 11  (36.4%)
+
+  Performance Failures Analysis:
+    FAIL — Bulk Payment Latency & Throughput:
+      Bulk payment API processes each transaction in batch sequentially.
+      Missing parallel/async processing. Will be refactored in Sprint 15.
+      Bulk batches of 1000 txns take 8.2s instead of target 5s.
+
+    FAIL — mTLS Handshake Time (312ms vs 200ms target):
+      New mTLS enforcement (BIP-342) added full certificate chain validation.
+      Certificate chain is 4 levels deep (Root → BI CA → Intermediate → PSP cert).
+      Optimization: cache CRL/OCSP responses; target 180ms. Fix planned Sprint 15.
+
+    FAIL — System Availability (99.1%):
+      UAT environment Redis cluster failure on Sprint Day 7-8 caused 2.2-hour
+      downtime. Infrastructure issue, not application code issue. Production
+      availability not affected. UAT environment SLA recalibrated separately.
+
+5.3 PERFORMANCE TEST ENVIRONMENT SPECS
+----------------------------------------
+  Environment: UAT-PERF cluster on GCP
+  Payment Gateway: 3 pods x 4 vCPU, 8GB RAM (GKE n2-standard-4)
+  Transaction Processor: 2 pods x 4 vCPU, 8GB RAM
+  API Gateway: 2 pods x 2 vCPU, 4GB RAM
+  Database: PostgreSQL 15 on Cloud SQL (db-custom-8-32768), read replica enabled
+  Redis: Redis Cluster 7.0 (3 nodes, 6 shards)
+  Load Generator: 4 x JMeter nodes (n2-highcpu-8), 1 x k6 cloud
+
+--------------------------------------------------------------------------------
+
+6. QUALITY GATE ASSESSMENT
+----------------------------
+
+Quality gates are assessed against Sprint Definition of Done (DoD) criteria.
+A sprint passes quality gates only if ALL mandatory gates pass.
+
+  QUALITY GATE                              | THRESHOLD | ACTUAL  | STATUS
+  ──────────────────────────────────────────────────────────────────────────
+  QG-01: Overall Test Pass Rate            | ≥ 90%     | 84.3%   | FAIL
+  QG-02: Test Execution Rate               | ≥ 95%     | 95.5%   | PASS
+  QG-03: P1 Defects Resolved               | 100%      | 100%    | PASS
+  QG-04: P2 Defects Resolved               | ≥ 80%     | 75.0%   | FAIL
+  QG-05: Overall Code Coverage (line)      | ≥ 80%     | 81.0%   | PASS
+  QG-06: Overall Code Coverage (branch)    | ≥ 80%     | 77.3%   | FAIL
+  QG-07: Performance SLAs Met             | ≥ 80%     | 63.6%   | FAIL
+  QG-08: Security Tests Pass Rate          | 100%      | 81.5%   | FAIL
+  QG-09: Zero P1 Open Defects at Release   | = 0       | 0       | PASS
+  QG-10: Regression Suite Pass Rate        | ≥ 95%     | 75.0%   | FAIL
+  QG-11: SonarQube Quality Gate           | Pass       | FAIL    | FAIL
+         (blocker: 2 new blocker issues — SQL injection risk in bulk API)
+  QG-12: OWASP Dependency Check           | 0 Critical | 1 Crit  | FAIL
+         (log4j-core 2.17.0 — update to 2.21.0 required)
+  ──────────────────────────────────────────────────────────────────────────
+  Gates Passed: 4 / 12  (33.3%)
+  Gates Failed: 8 / 12  (66.7%)
+
+  SPRINT 14 RELEASE DECISION: DO NOT RELEASE TO PRODUCTION
+
+  Conditions for release:
+    1. All P1 and P2 defects resolved (currently 2 P2 open: BIPAY-1138, BIPAY-1140)
+    2. Performance SLA for Bulk Payment API to meet ≤5000ms P95 target
+    3. mTLS handshake optimized to ≤200ms P95
+    4. SonarQube blocker issues resolved (SQL injection in BulkPaymentController)
+    5. OWASP: Upgrade log4j-core to 2.21.0
+    6. Branch code coverage raised to ≥80% for payment-gateway-svc
+    7. Security tests for mTLS all passing (currently 81.5%)
+
+  Sprint 14 Features Cleared for Release (individual features, pending above):
+    BIP-343: QRIS MCC Validation — quality gates passed for this story
+    BIP-345: PSP API Key Rotation — quality gates passed for this story
+
+--------------------------------------------------------------------------------
+
+7. RISK ASSESSMENT
+-------------------
+
+  RISK-01: Bulk Payment Performance (HIGH)
+    Description: Bulk payment API does not meet 5000ms P95 SLA target.
+    Sequential processing design requires architectural refactor to async queue.
+    Impact: BIP-340 cannot be released until resolved.
+    Mitigation: Sprint 15 spike to design async bulk processor using Kafka.
+    Owner: Dev Lead
+
+  RISK-02: mTLS Performance Overhead (MEDIUM)
+    Description: mTLS adds 312ms to P95 handshake time; target is 200ms.
+    Adding full PKI validation per-request is expensive at scale.
+    Impact: API Gateway may not meet SLA during peak load with mTLS.
+    Mitigation: Cache OCSP responses in Redis (24h TTL); session resumption.
+    Owner: Security Architect + Dev Team
+
+  RISK-03: SCD Type 1 on PSP Dimension (LOW-MEDIUM)
+    Description: PSP tier changes overwrite historical data. Defect #036 from
+    Data Pipeline team. Not a Sprint 14 story but surfaced during testing.
+    Impact: Historical regulatory reports may be inaccurate.
+    Mitigation: Escalated to Data Engineering; Sprint 16 design sprint planned.
+    Owner: Data Architect
+
+  RISK-04: log4j Dependency (HIGH)
+    Description: log4j-core 2.17.0 included via transitive dependency (Spring Boot).
+    OWASP check flags it as critical CVE.
+    Impact: Security non-compliance; cannot release to production.
+    Mitigation: Update Spring Boot parent to 3.2.x which ships log4j 2.21.0.
+    Owner: Dev Lead — Target: Sprint 15 Day 1
+
+--------------------------------------------------------------------------------
+
+8. METRICS TREND (Sprint-over-Sprint)
+---------------------------------------
+
+  Metric               | Sprint 12 | Sprint 13 | Sprint 14 | Trend
+  ─────────────────────────────────────────────────────────────────
+  Pass Rate (%)        |   91.2    |   89.7    |   84.3    |  DOWN ↓
+  Defects Found        |    18     |    21     |    23     |  UP ↑
+  P1 Defects           |     2     |     3     |     3     |  FLAT →
+  Execution Rate (%)   |   98.1    |   96.4    |   95.5    |  DOWN ↓
+  Code Coverage - Line |   77.3    |   79.1    |   81.0    |  UP ↑
+  Code Coverage - Branch|  74.1   |   75.8    |   77.3    |  UP ↑
+  Perf SLAs Met (%)    |   100.0   |    91.0   |   63.6    |  DOWN ↓↓
+  ─────────────────────────────────────────────────────────────────
+
+  Observations:
+  - Pass rate declining: complexity of Sprint 14 features (bulk, cross-border, mTLS)
+    introduced more edge cases than previous sprints
+  - Performance SLA decline significant: new bulk payment feature introduced without
+    async design; requires Sprint 15 refactor
+  - Code coverage improving steadily — positive trend, approaching target
+  - Defect count creeping up — recommend additional design review for Sprint 15
+
+--------------------------------------------------------------------------------
+
+9. RECOMMENDATIONS
+-------------------
+
+  1. PERF REDESIGN: Bulk Payment API must be redesigned to use async processing
+     (Kafka-based) before Sprint 14 features can be released. Estimate 3-day spike.
+
+  2. SECURITY PRIORITY: Resolve log4j CVE and SonarQube SQL injection blockers as
+     Day 1 of Sprint 15. Non-negotiable for production release.
+
+  3. BRANCH COVERAGE: payment-gateway-svc and data-pipeline-jobs need dedicated unit
+     test sessions to reach 80% branch coverage. Assign 2 days per team.
+
+  4. RISK REVIEW: Escalate mTLS performance to Architecture Board. May need to
+     reconsider PKI chain depth or introduce hardware-level TLS termination at LB.
+
+  5. TEST GAP: 9 requirements without test cases must be covered in Sprint 15.
+     Assign test case creation to Ari as first task of Sprint 15.
+
+  6. ENVIRONMENT: UAT Redis cluster instability affected Sprint 14 execution.
+     Request DevOps to review Redis HA config before Sprint 15 begins.
+
+--------------------------------------------------------------------------------
+
+SIGN-OFF
+---------
+  QA Lead:        Dewi Rahayu          Date: 2026-01-21  Signature: [D.Rahayu]
+  Test Manager:   Budi Santoso         Date: 2026-01-22  Signature: [B.Santoso]
+  Dev Lead:       Arif Wibowo          Date: 2026-01-22  Signature: [A.Wibowo]
+  Product Owner:  Sari Puspitasari     Date: 2026-01-23  Signature: [S.Puspita]
+
+================================================================================
+END OF SPRINT 14 TEST EXECUTION REPORT
+================================================================================

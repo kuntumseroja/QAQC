@@ -1,0 +1,58 @@
+DEFECT REPORT
+ID: DEF-2026-0147
+Date: 2026-04-08
+Reporter: Ahmad Tester
+Environment: SIT (System Integration Testing)
+
+TITLE: Payment transaction timeout when processing concurrent multi-currency transfers
+
+DESCRIPTION:
+When multiple PSPs submit concurrent credit_transfer transactions in different
+currencies (IDR, USD, SGD) simultaneously exceeding 200 TPS, the transaction
+processing engine returns HTTP 504 Gateway Timeout after 30 seconds. The issue
+occurs specifically in the currency conversion microservice which becomes a
+bottleneck during high concurrency.
+
+STEPS TO REPRODUCE:
+1. Configure JMeter load test with 3 thread groups (one per currency)
+2. Each thread group sends 100 credit_transfer requests simultaneously
+3. Set ramp-up period to 5 seconds
+4. Target endpoint: POST /api/v1/transactions
+5. Monitor response times and error rates
+
+ACTUAL RESULT:
+- 35% of transactions fail with HTTP 504 after 30s timeout
+- Currency conversion service CPU spikes to 98%
+- Memory usage reaches 7.2GB out of 8GB allocated
+- Error logs show: "java.util.concurrent.TimeoutException: FX rate lookup timeout"
+- Affected transactions remain in PROCESSING state (orphaned)
+
+EXPECTED RESULT:
+- All transactions should complete within 3 seconds (per SLA)
+- Error rate should be < 0.1% under 500 TPS load
+- Failed transactions should be properly rolled back to FAILED state
+- Circuit breaker should trigger after 10 consecutive failures
+
+SEVERITY: Critical
+PRIORITY: High
+MODULE: Transaction Processing / Currency Exchange
+AFFECTED VERSION: v2.1.3-rc1
+
+ENVIRONMENT DETAILS:
+- App Server: 4x c6i.2xlarge (8 vCPU, 16GB RAM)
+- Database: db.r6g.xlarge PostgreSQL 15.4
+- Redis Cache: cache.r6g.large
+- Load Balancer: ALB with target group
+- Region: ap-southeast-1
+
+LOGS:
+2026-04-08T14:23:45.123Z ERROR [currency-svc] FX rate cache miss for USD/IDR
+2026-04-08T14:23:45.456Z ERROR [currency-svc] External FX API timeout: 5000ms exceeded
+2026-04-08T14:23:45.789Z ERROR [tx-engine] Transaction TXN-20260408-A1B2C3 stuck in PROCESSING
+2026-04-08T14:23:46.012Z WARN  [tx-engine] Circuit breaker OPEN for currency-service
+2026-04-08T14:23:46.234Z ERROR [tx-engine] 47 transactions in limbo state
+
+ATTACHMENTS:
+- jmeter_results_20260408.csv
+- currency_svc_heap_dump.hprof
+- grafana_dashboard_screenshot.png

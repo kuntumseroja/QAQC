@@ -1,0 +1,538 @@
+================================================================================
+BUSINESS REQUIREMENTS DOCUMENT
+Currency Exchange & Multi-Currency Settlement Module
+Bank Indonesia National Payment System (BI-PAY)
+Document ID: BRD-CX-001-v1
+Version: 1.0
+Status: APPROVED
+Approval Date: 2025-08-15
+================================================================================
+
+1. DOCUMENT INFORMATION
+------------------------
+Document Title   : Currency Exchange & Multi-Currency Settlement Module BRD
+Project Name     : BI-PAY — Currency Exchange Module (CXM)
+Document Author  : Rudi Hartanto, Senior Business Analyst
+Business Owner   : Direktorat Kebijakan Sistem Pembayaran, Bank Indonesia
+Technical Lead   : Eko Prasetyo, Solution Architect
+Stakeholders     :
+  - Bank Indonesia — Payment Systems Policy Directorate
+  - Bank Indonesia — Foreign Exchange Management Department
+  - Licensed PSPs with cross-border capabilities (Tier 1)
+  - Bloomberg Data Services (FX Data Provider)
+  - Refinitiv/Reuters (FX Data Provider — secondary)
+  - SWIFT (cross-border settlement network)
+
+Version History:
+  v0.1 (2025-06-01) : Initial draft, Rudi Hartanto
+  v0.2 (2025-07-10) : Incorporated BI Foreign Exchange Department review
+  v0.3 (2025-08-01) : Added Bloomberg/Reuters feed specs; revised audit requirements
+  v1.0 (2025-08-15) : Final approval by Business Owner
+
+================================================================================
+
+2. EXECUTIVE SUMMARY
+---------------------
+Bank Indonesia is expanding the National Payment System (BI-PAY) to support
+multi-currency cross-border payments for licensed PSPs. Currently, all BI-PAY
+transactions settle exclusively in Indonesian Rupiah (IDR). The Currency Exchange
+Module (CXM) introduces:
+
+  1. Real-time FX rate ingestion from Bloomberg B-PIPE and Refinitiv TREP
+  2. Multi-currency conversion at point of transaction initiation
+  3. Settlement in the source or destination currency based on corridor agreements
+  4. FX rate caching with configurable TTL and fallback strategy
+  5. Full audit trail for every FX conversion per BI Regulation PBI No. 20/6/2018
+  6. Support for 15 initially approved currency corridors
+
+Business justification:
+  - Indonesia's cross-border remittance volume reached USD 11.2 billion in 2024
+  - BI regulatory target: increase digital cross-border payment adoption to 40%
+    of total remittance volume by 2027
+  - Existing manual FX conversion by PSPs creates inconsistency, rate arbitrage
+    risk, and limited audit capability for Bank Indonesia
+
+================================================================================
+
+3. BUSINESS CONTEXT & SCOPE
+-----------------------------
+
+3.1 IN SCOPE
+  - FX rate feed integration: Bloomberg B-PIPE API and Refinitiv TREP/EIKON
+  - 15 supported currency pairs (see Section 7)
+  - Multi-currency transaction initiation for PSPs with cross-border license
+  - FX rate caching layer with configurable TTL per currency pair
+  - Currency conversion calculation at transaction initiation time
+  - Settlement instruction generation in source or target currency
+  - FX conversion audit trail per transaction
+  - FX spread configuration by BI (markup over mid-market rate)
+  - FX rate reconciliation with BI's official reference rate (Kurs BI)
+  - Regulatory reporting: FX transaction reports to BI FX Department (monthly)
+
+3.2 OUT OF SCOPE
+  - Foreign currency account management (handled by commercial banks)
+  - FX hedging or treasury operations
+  - Cryptocurrency/stablecoin conversion
+  - Real-time FX trading or proprietary BI FX position management
+  - PSP-to-PSP bilateral FX arrangements (handled outside BI-PAY)
+
+3.3 AFFECTED SYSTEMS
+  - Currency Exchange Module (NEW — this BRD)
+  - Payment Gateway (MODIFIED — add currency field to payment request)
+  - Transaction Processing Service (MODIFIED — multi-currency amounts)
+  - Settlement Engine (MODIFIED — multi-currency settlement instructions)
+  - BI-PAY Analytics Dashboard (MODIFIED — add FX reporting widgets)
+  - Regulatory Reporting Service (MODIFIED — FX transaction monthly report)
+
+================================================================================
+
+4. BUSINESS REQUIREMENTS
+--------------------------
+
+4.1 FX RATE MANAGEMENT
+
+BR-FX-001: The system SHALL ingest FX rates from Bloomberg B-PIPE feed as the
+  primary source. The Bloomberg feed provides mid-market rates for all supported
+  currency pairs updated every 1 minute during market hours.
+  Priority: MUST HAVE
+
+BR-FX-002: The system SHALL maintain Refinitiv TREP feed as a secondary (fallback)
+  FX rate source. Automatic failover to Refinitiv SHALL occur within 60 seconds
+  of Bloomberg feed unavailability being detected.
+  Priority: MUST HAVE
+
+BR-FX-003: Market hours for FX rate feeds are defined as Monday 06:00 WIB to
+  Saturday 06:00 WIB (aligned with global FX market). Weekends and local holidays
+  SHALL use the last available closing rate with explicit "as-of" timestamp in
+  audit records.
+  Priority: MUST HAVE
+
+BR-FX-004: FX rates stored in the system SHALL include:
+  (a) Currency pair (ISO 4217, e.g., USD/IDR)
+  (b) Bid rate
+  (c) Ask rate
+  (d) Mid-market rate
+  (e) Source system (Bloomberg / Refinitiv / Manual)
+  (f) Rate timestamp (market data timestamp from feed)
+  (g) Ingestion timestamp (system receipt time)
+  (h) Rate validity window (from/to datetime)
+  Priority: MUST HAVE
+
+BR-FX-005: Bank Indonesia SHALL be able to configure a spread markup percentage
+  over the mid-market rate for each supported currency pair. The applied rate for
+  customer transactions = mid-market rate + spread markup.
+  Spread markup SHALL be configurable via the BI Admin Portal without code deployment.
+  Priority: MUST HAVE
+
+BR-FX-006: The system SHALL validate that ingested FX rates fall within a
+  reasonable deviation band from the previous rate. If a rate moves >5% from the
+  previous rate in a single update, the system SHALL:
+  (a) Flag the rate as "anomalous"
+  (b) Retain the previous rate for transaction use
+  (c) Alert the BI FX Operations team via automated notification
+  (d) Require manual confirmation from BI operator before activating new rate
+  Priority: MUST HAVE
+
+BR-FX-007: The system SHALL maintain a historical record of all FX rates received,
+  not just the current rate. Historical rate data SHALL be retained for a minimum
+  of 7 years in accordance with Bank Indonesia record retention policy.
+  Priority: MUST HAVE
+
+BR-FX-008: BI operators SHALL have a manual FX rate override capability for
+  exceptional circumstances (e.g., Bloomberg feed and Refinitiv both unavailable).
+  Manual rate entry SHALL require dual approval (4-eyes principle): one entry by
+  operator, one approval by BI FX supervisor. Override SHALL be time-limited
+  (maximum 4-hour validity) and fully audited.
+  Priority: SHOULD HAVE
+
+BR-FX-009: The system SHALL publish current FX rates via an API for PSPs to
+  retrieve before initiating a cross-border transaction. Rate quotes provided via
+  this API SHALL be valid for 90 seconds (rate lock window). The system SHALL
+  honor the locked rate if the transaction is submitted within the lock window.
+  Priority: MUST HAVE
+
+BR-FX-010: FX rate quotes obtained under BR-FX-009 SHALL be recorded in the
+  audit trail and linked to the resulting transaction (or recorded if abandoned).
+  Priority: MUST HAVE
+
+--------------------------------------------------------------------------------
+
+4.2 MULTI-CURRENCY CONVERSION
+
+BR-MC-001: The system SHALL support currency conversion at the point of payment
+  initiation. The PSP provides the source amount and source currency; the system
+  calculates the destination amount in the target currency using the current
+  locked rate.
+  Priority: MUST HAVE
+
+BR-MC-002: Currency conversion SHALL use the following formula:
+  destination_amount = source_amount / source_to_IDR_rate * dest_to_IDR_rate
+  Where:
+    source_to_IDR_rate = applied rate for source currency (mid + spread)
+    dest_to_IDR_rate   = applied rate for destination currency (mid + spread)
+  All intermediate calculations SHALL use BigDecimal with precision 20, scale 8.
+  Priority: MUST HAVE
+
+BR-MC-003: The system SHALL support both "you send" (source-amount-fixed) and
+  "they receive" (destination-amount-fixed) conversion modes:
+  Mode A (PSP specifies source): System calculates destination amount.
+  Mode B (PSP specifies destination): System calculates required source amount.
+  Priority: MUST HAVE
+
+BR-MC-004: Conversion amounts SHALL be rounded to the currency's standard minor
+  units as defined by ISO 4217:
+  - IDR: 0 decimal places (whole Rupiah)
+  - USD, SGD, EUR, GBP, AUD, CAD: 2 decimal places
+  - JPY: 0 decimal places
+  - All others: 2 decimal places unless otherwise specified in Appendix A
+  Priority: MUST HAVE
+
+BR-MC-005: The system SHALL prevent conversion if the resulting amount in either
+  source or destination currency exceeds the PSP's configured daily cross-border
+  limit. Limit checking SHALL occur before rate lock is issued.
+  Priority: MUST HAVE
+
+BR-MC-006: PSPs SHALL be able to query their remaining daily cross-border FX
+  quota via API. Quota SHALL reset at 00:00 WIB daily.
+  Priority: SHOULD HAVE
+
+BR-MC-007: The system SHALL support cross-rate calculation for currency pairs where
+  direct Bloomberg/Refinitiv quotes are unavailable. Cross rates SHALL be calculated
+  via IDR as the intermediary currency (e.g., MYR/SGD = MYR/IDR ÷ SGD/IDR).
+  Priority: MUST HAVE
+
+BR-MC-008: A currency conversion simulation ("quote only") endpoint SHALL be
+  provided. Quote-only requests do not lock the rate and do not count against
+  PSP quotas. Response includes indicative rate, spread applied, and validity window.
+  Priority: SHOULD HAVE
+
+--------------------------------------------------------------------------------
+
+4.3 MULTI-CURRENCY SETTLEMENT
+
+BR-ST-001: The system SHALL support settlement of cross-border transactions in
+  one of three settlement modes:
+  Mode 1 (IDR Settlement): All amounts settled to PSP in IDR regardless of
+    transaction currency. PSP receives IDR equivalent at locked rate.
+  Mode 2 (Source Currency Settlement): PSP receives settlement in source currency.
+    BI-PAY debits source currency from PSP's nostro account.
+  Mode 3 (Destination Currency Settlement): PSP receives settlement in destination
+    currency. BI-PAY credits destination currency to PSP's vostro account.
+  Settlement mode assigned per PSP per currency corridor.
+  Priority: MUST HAVE
+
+BR-ST-002: Settlement instructions generated by the system SHALL include:
+  (a) Unique settlement reference ID
+  (b) Transaction reference(s) included in this settlement
+  (c) Source currency and amount
+  (d) Destination currency and amount
+  (e) FX rate applied (locked rate with timestamp)
+  (f) Spread markup applied
+  (g) Settlement mode (1, 2, or 3)
+  (h) Settlement bank and account details (from PSP registration)
+  (i) Value date
+  (j) SWIFT message category (MT103/MT202 as applicable)
+  Priority: MUST HAVE
+
+BR-ST-003: Cross-border settlement via SWIFT SHALL use the BI-PAY SWIFT BIC
+  (BINAIDJA). SWIFT message generation SHALL comply with SWIFT Standards 2025.
+  Priority: MUST HAVE
+
+BR-ST-004: Settlement batches for cross-border transactions SHALL be generated at:
+  - 10:00 WIB (morning batch)
+  - 14:00 WIB (afternoon batch)
+  - 17:30 WIB (end-of-day batch — final for value date)
+  Transactions submitted after 17:30 WIB are settled value date T+1.
+  Priority: MUST HAVE
+
+BR-ST-005: The system SHALL reconcile FX settlement amounts against BI's official
+  Kurs BI reference rate published daily at 08:00 WIB. Reconciliation report SHALL
+  flag transactions where applied rate deviates >1% from Kurs BI. Such transactions
+  SHALL require BI FX Department review.
+  Priority: MUST HAVE
+
+BR-ST-006: Failed cross-border settlements (e.g., correspondent bank rejection)
+  SHALL trigger an automated reversal of the original transaction within 4 business
+  hours, with notification to the originating PSP.
+  Priority: MUST HAVE
+
+--------------------------------------------------------------------------------
+
+4.4 FX RATE CACHING STRATEGY
+
+BR-CA-001: The system SHALL cache FX rates to avoid repeated Bloomberg API calls
+  for each transaction. Cache behavior per rate type:
+  (a) Live market rate (market hours): cache TTL = 60 seconds
+  (b) End-of-day rate (after market close): cache TTL = until next market open
+  (c) Holiday/weekend rate: cache TTL = until next business day market open
+  Priority: MUST HAVE
+
+BR-CA-002: Cache SHALL be implemented using a distributed cache (Redis Cluster)
+  to ensure rate consistency across all application instances.
+  Priority: MUST HAVE
+
+BR-CA-003: Cache miss handling:
+  (a) If cache miss occurs and Bloomberg feed is available → fetch live rate,
+      cache it, return to caller
+  (b) If cache miss and Bloomberg unavailable → try Refinitiv feed
+  (c) If both feeds unavailable → return last cached rate with staleness flag
+      and "as-of" timestamp; reject transaction if rate is stale >4 hours
+  Priority: MUST HAVE
+
+BR-CA-004: Cache MUST be pre-warmed for all 15 supported currency pairs on system
+  startup before accepting cross-border transactions. Startup sequence SHALL not
+  complete until all 15 rates are cached.
+  Priority: MUST HAVE
+
+BR-CA-005: The system SHALL expose a cache management API (internal, BI admin only)
+  to:
+  (a) View current cached rate for any pair with staleness info
+  (b) Manually invalidate and refresh a specific pair's cache entry
+  (c) View cache hit/miss ratio statistics
+  Priority: SHOULD HAVE
+
+BR-CA-006: Cache eviction policy SHALL be explicit TTL-based expiry only.
+  LRU or LFU eviction policies SHALL NOT be applied to FX rate cache keys to
+  prevent unexpected eviction of less-frequently queried currency pairs.
+  Priority: MUST HAVE
+
+--------------------------------------------------------------------------------
+
+4.5 CONVERSION AUDIT TRAIL
+
+BR-AU-001: Every FX conversion — whether from a successful transaction, a failed
+  transaction, or a rate quote (lock) — SHALL be recorded in the FX Audit Log.
+  Priority: MUST HAVE
+
+BR-AU-002: FX Audit Log record SHALL capture:
+  (a) audit_id (UUID)
+  (b) event_type: RATE_QUOTE | RATE_LOCK | CONVERSION | REVERSAL | MANUAL_OVERRIDE
+  (c) transaction_id (if linked to transaction; null for quote-only)
+  (d) psp_id
+  (e) source_currency (ISO 4217)
+  (f) source_amount (BigDecimal, scale 8)
+  (g) destination_currency (ISO 4217)
+  (h) destination_amount (BigDecimal, scale 8)
+  (i) mid_rate (rate before spread)
+  (j) spread_bps (basis points applied)
+  (k) applied_rate (mid_rate + spread)
+  (l) rate_source (BLOOMBERG | REFINITIV | MANUAL | CACHED)
+  (m) rate_as_of_timestamp (market data timestamp)
+  (n) system_timestamp (record creation time)
+  (o) operator_id (for manual overrides only)
+  (p) approver_id (for manual overrides only)
+  (q) rate_lock_expiry (for RATE_LOCK events)
+  (r) outcome (SUCCESS | EXPIRED | REJECTED | REVERSED)
+  Priority: MUST HAVE
+
+BR-AU-003: Audit log records SHALL be immutable once written. No UPDATE or DELETE
+  operations allowed. Corrections made via new records with reference to original.
+  Priority: MUST HAVE
+
+BR-AU-004: Audit log SHALL be replicated to a separate read-only audit database
+  within 5 seconds of original write. Audit DB access restricted to BI Compliance
+  and BI FX Department.
+  Priority: MUST HAVE
+
+BR-AU-005: FX Audit Log SHALL support query by:
+  (a) Date range
+  (b) PSP ID
+  (c) Currency pair
+  (d) Transaction ID
+  (e) Event type
+  Response time for audit queries: ≤3 seconds for 1-month date range.
+  Priority: MUST HAVE
+
+BR-AU-006: BI Compliance team SHALL be able to export FX audit records in CSV
+  and XBRL format for regulatory submission to Bank Indonesia's reporting system
+  (LKPBU — Laporan Kegiatan Pusat Valuta Asing).
+  Priority: MUST HAVE
+
+BR-AU-007: Rate lock events that expire without a corresponding transaction
+  (abandoned quotes) SHALL be flagged in the audit log with outcome = EXPIRED and
+  retained for investigation purposes.
+  Priority: SHOULD HAVE
+
+--------------------------------------------------------------------------------
+
+5. CURRENCY PAIR SPECIFICATIONS
+
+5.1 SUPPORTED CURRENCY PAIRS (Phase 1 — 15 Pairs)
+----------------------------------------------------
+  Pair ID | Source | Destination | Primary Corridor         | Settlement Mode
+  ────────────────────────────────────────────────────────────────────────────
+  CX-001  | IDR    | USD         | Indonesia → USA          | Mode 1 or 3
+  CX-002  | USD    | IDR         | USA → Indonesia          | Mode 1 or 2
+  CX-003  | IDR    | SGD         | Indonesia → Singapore    | Mode 1 or 3
+  CX-004  | SGD    | IDR         | Singapore → Indonesia    | Mode 1 or 2
+  CX-005  | IDR    | MYR         | Indonesia → Malaysia     | Mode 1 or 3
+  CX-006  | MYR    | IDR         | Malaysia → Indonesia     | Mode 1 or 2
+  CX-007  | IDR    | CNY         | Indonesia → China        | Mode 1 or 3
+  CX-008  | CNY    | IDR         | China → Indonesia        | Mode 1 or 2
+  CX-009  | IDR    | EUR         | Indonesia → Europe       | Mode 1 or 3
+  CX-010  | EUR    | IDR         | Europe → Indonesia       | Mode 1 or 2
+  CX-011  | IDR    | JPY         | Indonesia → Japan        | Mode 1 or 3
+  CX-012  | JPY    | IDR         | Japan → Indonesia        | Mode 1 or 2
+  CX-013  | IDR    | AUD         | Indonesia → Australia    | Mode 1 or 3
+  CX-014  | AUD    | IDR         | Australia → Indonesia    | Mode 1 or 2
+  CX-015  | IDR    | GBP         | Indonesia → UK           | Mode 1 or 3
+  ────────────────────────────────────────────────────────────────────────────
+
+5.2 PHASE 2 CURRENCIES (Planned, Not in Scope for This BRD)
+  CAD, CHF, HKD, THB, PHP, VND, KRW, INR, SAR
+
+5.3 DAILY TRANSACTION LIMITS PER PSP PER PAIR (Default, Configurable by BI)
+  Tier 1 PSP: USD equivalent 10,000,000 per pair per day
+  Tier 2 PSP: USD equivalent 1,000,000 per pair per day
+  Tier 3 PSP: Cross-border not permitted
+
+================================================================================
+
+6. NON-FUNCTIONAL REQUIREMENTS
+--------------------------------
+
+NFR-FX-001 PERFORMANCE:
+  - FX rate retrieval (cache hit): ≤ 50ms P99
+  - FX rate retrieval (cache miss + Bloomberg fetch): ≤ 500ms P99
+  - Currency conversion calculation: ≤ 10ms per transaction
+  - Rate lock API response: ≤ 200ms P95
+  - Audit log write: ≤ 100ms P99 (async, non-blocking to transaction flow)
+
+NFR-FX-002 AVAILABILITY:
+  - FX rate availability (system uptime): ≥ 99.9% during market hours
+  - Bloomberg feed monitoring: alert within 60 seconds of feed degradation
+  - Failover to Refinitiv: automatic, completed in ≤ 60 seconds
+
+NFR-FX-003 ACCURACY:
+  - FX rate precision: 8 decimal places for rate storage and calculation
+  - Rounding: banker's rounding (HALF_EVEN) for final displayed amounts
+  - Maximum rate staleness for transaction use: 4 hours (hard limit)
+
+NFR-FX-004 SECURITY:
+  - Bloomberg B-PIPE API credentials stored in HashiCorp Vault
+  - Refinitiv API key stored in HashiCorp Vault
+  - FX rate feed connections secured via TLS 1.3
+  - Audit log write access restricted to CXM service account only
+  - Manual override function: IP-restricted to BI internal network
+
+NFR-FX-005 REGULATORY COMPLIANCE:
+  - BI Regulation PBI No. 20/6/2018 on FX operations
+  - BI Regulation PADG No. 20/10/2018 on FX transaction reporting
+  - OJK Circular SE-12/SEOJK.03/2021 on digital payment risk management
+  - Data retention: 7 years minimum (audit trail, rate history, transaction records)
+
+NFR-FX-006 MONITORING:
+  - Real-time dashboard: current rate per pair, feed status, last update time
+  - Alerts: feed unavailability, anomalous rate movements, cache misses >10%
+  - Daily FX volume report to BI FX Department Operations team at 07:00 WIB
+
+================================================================================
+
+7. FX RATE FEED TECHNICAL SPECIFICATIONS
+
+7.1 BLOOMBERG B-PIPE INTEGRATION
+  Protocol: Bloomberg B-PIPE API v3
+  Connection: Dedicated Bloomberg terminal server (bi-bloomberg.internal.bankid.go.id)
+  Subscription type: BLPAPI_SUBSCRIPTIONTYPE_REAL_TIME
+  Fields subscribed per pair: BID, ASK, MID, PX_LAST, LAST_UPDATE_DT
+  Frequency: Tick-by-tick during market hours; polling every 60s for idle pairs
+  Authentication: Bloomberg UUID + serial number (stored in Vault)
+  Failover: Automatic switch to secondary Bloomberg terminal on primary failure
+
+7.2 REFINITIV TREP INTEGRATION
+  Protocol: Refinitiv Market Data System (RMDS) via Elektron API
+  Connection: bi-refinitiv.internal.bankid.go.id:14002 (TREP)
+  Item names: e.g., USD/IDR=, SGD/IDR=, MYR/IDR=
+  Fields: BID, ASK, TRDPRC_1, NETCHNG_1, QUOTIM
+  Authentication: Refinitiv DACS user (stored in Vault)
+  Use: Secondary feed only; activated on Bloomberg failover
+
+7.3 BI KURS REFERENCE RATE
+  Source: Bank Indonesia website API (internal)
+  URL: https://www.bi.go.id/api/v1/kurs-referensi
+  Frequency: Daily at 08:00 WIB (published by BI FX Department)
+  Use: Reconciliation only; NOT used for transaction conversion
+  Format: JSON (USD/IDR, EUR/IDR, GBP/IDR, SGD/IDR, JPY/IDR, CNY/IDR,
+           AUD/IDR, MYR/IDR only — 8 pairs)
+
+================================================================================
+
+8. BUSINESS RULES SUMMARY
+
+Rule BR-01: FX rates must always include a timestamp — no "timeless" rates allowed
+Rule BR-02: No transaction processed using a rate older than 4 hours
+Rule BR-03: Spread markup is BI-defined per pair; PSPs cannot negotiate rates
+Rule BR-04: Rate locks are 90 seconds — expired locks trigger transaction rejection
+Rule BR-05: Anomalous rate movements (>5% change) require manual BI confirmation
+Rule BR-06: Dual approval required for any manual rate override (4-eyes principle)
+Rule BR-07: Cross-border transactions only for PSPs with valid cross-border license
+Rule BR-08: Daily limits enforced at transaction initiation, not at settlement
+Rule BR-09: IDR amounts always rounded to whole Rupiah (0 decimal places)
+Rule BR-10: All FX conversions recorded in immutable audit log; no deletion
+Rule BR-11: Settlement at locked rate regardless of subsequent rate movement
+Rule BR-12: Failed settlements trigger automatic reversal within 4 business hours
+Rule BR-13: FX transaction data retained minimum 7 years (regulatory requirement)
+Rule BR-14: SWIFT messages generated in compliance with SWIFT Standards 2025
+Rule BR-15: Rate quotes that expire without transaction use are logged as EXPIRED
+
+================================================================================
+
+9. ACCEPTANCE CRITERIA
+
+For User Acceptance Testing (UAT), all of the following shall be demonstrated:
+
+AC-01: Bloomberg B-PIPE live rate feed ingested and visible in admin dashboard
+AC-02: Automatic failover to Refinitiv within 60 seconds of Bloomberg failure simulation
+AC-03: FX rate cached with correct TTL (60s live, until next open for closing rate)
+AC-04: Currency conversion correct to 8dp for all 15 pairs (spot check 3 pairs)
+AC-05: Rate lock obtained via API; honored for transaction submitted within 90s
+AC-06: Rate lock rejected for transaction submitted after 90s expiry
+AC-07: Anomalous rate (>5% spike injected) flagged and BI alert triggered
+AC-08: Manual override: requires 2 approvals; time-limited; logged in audit trail
+AC-09: Settlement instruction generated with correct SWIFT fields
+AC-10: Failed settlement triggers reversal notification to PSP within 4 hours
+AC-11: FX Audit Log captures all required fields (BR-AU-002) for a test transaction
+AC-12: Audit log is queryable by PSP ID + date range in ≤3 seconds
+AC-13: Daily FX transaction report exported in CSV format for BI FX Department
+AC-14: PSP daily quota enforced; transaction rejected when limit exceeded
+AC-15: Rate pre-warming on system startup completes before first API call accepted
+AC-16: FX rate for public holiday uses last closing rate with correct "as-of" label
+
+================================================================================
+
+10. GLOSSARY
+-------------
+  BID rate      : Rate at which market maker buys the base currency
+  ASK rate      : Rate at which market maker sells the base currency
+  MID rate      : Arithmetic mean of bid and ask (= (bid + ask) / 2)
+  Spread        : Markup over mid-market rate, measured in basis points (1bp = 0.01%)
+  Nostro account: Our account held at a foreign correspondent bank
+  Vostro account: Foreign bank's account held with us
+  Corridor      : A defined pair of countries for cross-border transactions
+  Rate lock     : Guaranteed rate valid for 90 seconds upon PSP request
+  SWIFT MT103   : SWIFT message for customer credit transfers (cross-border)
+  SWIFT MT202   : SWIFT message for financial institution transfers
+  LKPBU         : Laporan Kegiatan Pusat Valuta Asing (FX reporting to BI)
+  Kurs BI       : Bank Indonesia's official daily reference exchange rate
+  PBI           : Peraturan Bank Indonesia (BI Regulation)
+  PADG          : Peraturan Anggota Dewan Gubernur (BI Board Governor Member Regulation)
+  DACS          : Data Access Control System (Refinitiv authentication)
+  B-PIPE        : Bloomberg's server-side API for real-time market data
+
+================================================================================
+DOCUMENT APPROVAL
+
+  Business Owner    : Departemen Kebijakan Sistem Pembayaran, Bank Indonesia
+                      Signed: [Digitally Signed — BKSP/2025/0815]
+
+  Technical Approver: IT Architecture Division, Bank Indonesia
+                      Signed: [Digitally Signed — IT-ARCH/2025/0815]
+
+  Risk & Compliance : BI Risk Management Division
+                      Signed: [Digitally Signed — RISK/2025/0815]
+
+================================================================================
+END OF DOCUMENT
+BRD-CX-001-v1 | Currency Exchange & Multi-Currency Settlement Module
+Confidential — Bank Indonesia Internal Use Only
+================================================================================

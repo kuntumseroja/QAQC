@@ -1,0 +1,249 @@
+TEST CASE REPOSITORY
+PSP Onboarding Module - Bank Indonesia Payment Infrastructure
+Exported from Jira | Sprint 10-14 | Last Updated: April 2026
+
+=== REGISTRATION (REQ-001) ===
+
+TC-REG-001: Valid PSP Registration - All Fields
+Precondition: User logged in as PSP representative
+Steps: Navigate to registration > Fill all mandatory fields with valid data > Submit
+Expected: Application created with status "Submitted", confirmation email sent
+Priority: High | Status: Active | Mapped: REQ-001
+
+TC-REG-002: Registration - Missing Mandatory Fields
+Precondition: User on registration form
+Steps: Leave PSP Name empty > Fill other fields > Click Submit
+Expected: Validation error "PSP Name is required" displayed, form not submitted
+Priority: High | Status: Active | Mapped: REQ-001
+
+TC-REG-003: Registration - Duplicate License Number
+Precondition: PSP with license "LIC-2026-001" already exists
+Steps: Enter license number "LIC-2026-001" > Fill other fields > Submit
+Expected: Error "License number already registered" with link to existing application
+Priority: High | Status: Active | Mapped: REQ-001
+
+TC-REG-004: Registration - Invalid Email Format
+Steps: Enter "invalid-email" in email field > Tab out
+Expected: Inline validation "Please enter a valid email address"
+Priority: Medium | Status: Active | Mapped: REQ-001
+
+TC-REG-005: Registration - Special Characters in PSP Name
+Steps: Enter "PSP @#$% Test" in PSP Name > Submit
+Expected: Validation error or sanitized acceptance depending on policy
+Priority: Low | Status: Active | Mapped: REQ-001
+
+=== DOCUMENT UPLOAD (REQ-002) ===
+
+TC-DOC-001: Upload Valid PDF Document
+Precondition: Application in "Submitted" status
+Steps: Click "Upload Documents" > Select valid PDF (5MB) > Upload
+Expected: File uploaded, virus scan passes, hash generated, preview available
+Priority: High | Status: Active | Mapped: REQ-002
+
+TC-DOC-002: Upload Oversized File (>25MB)
+Steps: Select a 30MB PDF file > Attempt upload
+Expected: Error "File size exceeds 25MB limit"
+Priority: High | Status: Active | Mapped: REQ-002
+
+TC-DOC-003: Upload Unsupported Format (EXE)
+Steps: Select an .exe file > Attempt upload
+Expected: Error "Unsupported file format. Accepted: PDF, DOCX, JPG, PNG"
+Priority: High | Status: Active | Mapped: REQ-002
+
+TC-DOC-004: Upload Document - Virus Detected
+Steps: Upload EICAR test file
+Expected: Upload rejected with "Security threat detected" message
+Priority: Critical | Status: Active | Mapped: REQ-002
+
+=== KYC/AML SCREENING (REQ-003) ===
+
+TC-KYC-001: KYC Screening - Clean Applicant
+Precondition: Principal name not on any watchlist
+Steps: Submit application with clean principal > Wait for screening
+Expected: Screening status "CLEAR", confidence 0%, completed within 30s
+Priority: High | Status: Active | Mapped: REQ-003
+
+TC-KYC-002: KYC Screening - Watchlist Match Found
+Precondition: Principal name matches PPATK watchlist entry
+Steps: Submit application with matched name > Wait for screening
+Expected: Screening status "MATCH FOUND", confidence > 85%, flagged for manual review
+Priority: Critical | Status: Active | Mapped: REQ-003
+
+TC-KYC-003: KYC Screening - Partial Name Match
+Steps: Submit with name partially matching watchlist (e.g., common surname)
+Expected: Screening status "POTENTIAL MATCH", confidence 40-84%, flagged as warning
+Priority: High | Status: Active | Mapped: REQ-003
+
+TC-KYC-004: KYC Screening - Timeout Handling
+Steps: Simulate PPATK API timeout (>30 seconds)
+Expected: Screening status "TIMEOUT", retry queued, user notified
+Priority: Medium | Status: Active | Mapped: REQ-003
+
+=== TECHNICAL ASSESSMENT (REQ-004) ===
+
+TC-TECH-001: API Health Check - Endpoint Available
+Precondition: PSP API endpoint configured and running
+Steps: System performs health check on PSP endpoint
+Expected: Response 200 within 500ms, check marked PASS
+Priority: High | Status: Active | Mapped: REQ-004
+
+TC-TECH-002: API Health Check - Endpoint Unavailable
+Steps: Configure non-responsive endpoint > Run assessment
+Expected: Timeout after 500ms, check marked FAIL with error details
+Priority: High | Status: Active | Mapped: REQ-004
+
+TC-TECH-003: TLS Certificate Validation - Valid Certificate
+Steps: System validates PSP TLS certificate
+Expected: TLS 1.3 confirmed, certificate not expired, chain valid, check PASS
+Priority: High | Status: Active | Mapped: REQ-004
+
+TC-TECH-004: TLS Certificate - Expired Certificate
+Steps: PSP presents expired TLS certificate
+Expected: Check FAIL with "Certificate expired on [date]"
+Priority: Critical | Status: Active | Mapped: REQ-004
+
+TC-TECH-005: ISO 8583 Format Compliance
+Steps: Send test ISO 8583 message to PSP > Validate response format
+Expected: Response matches ISO 8583 spec, all mandatory fields present
+Priority: High | Status: Active | Mapped: REQ-004
+
+=== RISK SCORING (REQ-005) ===
+
+TC-RISK-001: Risk Score - Low Risk PSP (Score > 80)
+Precondition: PSP with strong financials, good tech, clean compliance
+Steps: Complete all assessments > View risk score
+Expected: Score 80-100, category "Low Risk", auto-approved for Level 1
+Priority: High | Status: Active | Mapped: REQ-005
+
+TC-RISK-002: Risk Score - High Risk PSP (Score < 60)
+Precondition: PSP with compliance issues and weak financials
+Steps: Complete assessments > View risk score
+Expected: Score < 60, category "High Risk", routed to Level 4 (Director)
+Priority: High | Status: Active | Mapped: REQ-005
+
+TC-RISK-003: Risk Score Breakdown Display
+Steps: View risk score detail page
+Expected: Shows breakdown: Financial 30%, Technical 25%, Compliance 25%, Operations 20%
+Priority: Medium | Status: Active | Mapped: REQ-005
+
+=== APPROVAL WORKFLOW (REQ-006) ===
+
+TC-APPR-001: Level 1 - Automated Validation Pass
+Steps: Submit fully compliant application
+Expected: System auto-validates within 1 hour, advances to Level 2
+Priority: High | Status: Active | Mapped: REQ-006
+
+TC-APPR-002: Level 2 - Compliance Officer Approval
+Precondition: Application at Level 2
+Steps: Compliance Officer reviews > Clicks "Approve"
+Expected: Application advances to Level 3, timestamp recorded
+Priority: High | Status: Active | Mapped: REQ-006
+
+TC-APPR-003: Level 3 - Technical Committee Voting (2 of 3)
+Precondition: Application at Level 3, 3 committee members assigned
+Steps: Member 1 approves > Member 2 approves
+Expected: 2/3 threshold met, application approved at Level 3
+Priority: High | Status: Active | Mapped: REQ-006
+
+TC-APPR-004: Level 3 - Technical Committee Rejection
+Steps: Member 1 rejects > Member 2 rejects
+Expected: Application rejected, rejection rationale required and recorded
+Priority: High | Status: Active | Mapped: REQ-006
+
+TC-APPR-005: SLA Breach Escalation
+Precondition: Application stuck at Level 2 for > 2 days
+Steps: Wait for SLA timer to breach
+Expected: Escalation notification sent to manager, highlighted in dashboard
+Priority: Medium | Status: Active | Mapped: REQ-006
+
+=== CREDENTIAL PROVISIONING (REQ-007) ===
+
+TC-CRED-001: API Credential Generation
+Precondition: Application fully approved
+Steps: System provisions credentials automatically
+Expected: client_id + client_secret generated within 60s, RSA-256 signed
+Priority: Critical | Status: Active | Mapped: REQ-007
+
+TC-CRED-002: mTLS Certificate Issuance
+Steps: After approval, system generates mutual TLS certificate
+Expected: Certificate valid for 1 year, delivered via encrypted channel
+Priority: Critical | Status: Active | Mapped: REQ-007
+
+TC-CRED-003: Sandbox Access Provisioning
+Steps: After credential generation, verify sandbox access
+Expected: PSP can authenticate to sandbox with issued credentials
+Priority: High | Status: Active | Mapped: REQ-007
+
+=== BATCH PROCESSING (REQ-008) ===
+
+TC-BATCH-001: Create Batch with 25 PSPs
+Steps: Admin creates batch > Adds 25 PSP applications
+Expected: Batch created, pipeline dashboard shows 25 applications
+Priority: High | Status: Active | Mapped: REQ-008
+
+TC-BATCH-002: Batch Processing - Parallel Execution
+Steps: Start batch processing for 25 PSPs
+Expected: Multiple applications processed simultaneously, not sequentially
+Priority: Medium | Status: Active | Mapped: REQ-008
+
+=== DASHBOARD (REQ-009) ===
+
+TC-DASH-001: Pipeline Status Display
+Steps: Navigate to onboarding dashboard
+Expected: Shows counts for submitted/in-review/approved/rejected
+Priority: High | Status: Active | Mapped: REQ-009
+
+TC-DASH-002: Dashboard Auto-Refresh
+Steps: Keep dashboard open > Change application status in another tab
+Expected: Dashboard updates within 5 minutes without manual refresh
+Priority: Medium | Status: Active | Mapped: REQ-009
+
+TC-DASH-003: Dashboard Export to PDF
+Steps: Click "Export PDF" on dashboard
+Expected: PDF downloaded with current dashboard data and charts
+Priority: Medium | Status: Active | Mapped: REQ-009
+
+=== AUDIT TRAIL (REQ-010) ===
+
+TC-AUDIT-001: User Action Logging
+Steps: Perform various actions (view, edit, approve) > Check audit log
+Expected: All actions logged with timestamp, user ID, IP address, action type
+Priority: High | Status: Active | Mapped: REQ-010
+
+TC-AUDIT-002: Audit Log Search
+Steps: Search audit logs by date range and user
+Expected: Filtered results returned, export to CSV available
+Priority: Medium | Status: Active | Mapped: REQ-010
+
+=== NOTIFICATIONS (REQ-011) ===
+
+TC-NOTIF-001: Email Notification on Status Change
+Steps: Change application status from "Submitted" to "In Review"
+Expected: Email sent to PSP contact within 2 minutes
+Priority: High | Status: Active | Mapped: REQ-011
+
+TC-NOTIF-002: SLA Warning Notification
+Precondition: Application approaching SLA limit (at 80%)
+Steps: Wait for 80% of SLA time
+Expected: Warning notification sent to assigned reviewer
+Priority: Medium | Status: Active | Mapped: REQ-011
+
+=== SECURITY (REQ-012) ===
+
+TC-SEC-001: Session Timeout After 15 Minutes
+Steps: Login > Wait 16 minutes without activity > Try action
+Expected: Session expired, redirect to login page
+Priority: High | Status: Active | Mapped: REQ-012
+
+TC-SEC-002: MFA for Admin Login
+Steps: Login as admin user with username/password
+Expected: MFA challenge (OTP) prompted before granting access
+Priority: Critical | Status: Active | Mapped: REQ-012
+
+TC-SEC-003: PII Data Masking in Logs
+Steps: Trigger action with PII data > Check application logs
+Expected: PII fields (email, phone, name) masked as "***"
+Priority: High | Status: Active | Mapped: REQ-012
+
+TOTAL: 42 Test Cases | 12 Requirements Covered
+Coverage Target: 100% | Current Mapped: REQ-001 through REQ-012
