@@ -1,0 +1,39 @@
+# =============================================================================
+# Docker Compose for QAQC4BI
+# =============================================================================
+
+services:
+  qaqc4bi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qaqc4bi
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+
+    # Load environment variables from .env.local
+    env_file:
+      - .env.local
+
+    # Persist the SQLite database outside the container
+    volumes:
+      - qaqc4bi-data:/app/data
+
+    # Health check — matches the one in the Dockerfile but can be overridden here
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+    # Limit resources to prevent runaway usage on a shared VPS
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+volumes:
+  qaqc4bi-data:
+    driver: local

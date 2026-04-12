@@ -18,7 +18,7 @@
 
 ---
 
-## ACT 1: Executive Dashboard Overview (5 min)
+## Step 1: Executive Dashboard Overview (5 min)
 
 ### Narration:
 > "Welcome to QAQC4BI — our AI-powered QA/QC automation platform built specifically for the BI-FAST Expansion project. Let me start with the executive dashboard that gives the Project Director real-time visibility into quality health across all workstreams."
@@ -39,7 +39,7 @@
 
 ---
 
-## ACT 2: Test Scenario Generation from BI-FAST BRD (10 min)
+## Step 2: Test Scenario Generation from BI-FAST BRD (10 min)
 
 ### Narration:
 > "The first pain point we're solving is test scenario creation. Previously, our testers spent 3-5 days manually writing test cases from a BRD. With QAQC4BI, we generate comprehensive positive, negative, and edge case scenarios in under a minute."
@@ -114,14 +114,14 @@ Rate limit exceeded returns HTTP 429 with Retry-After header.
 
 ---
 
-## ACT 3: Traceability Matrix — Requirements to Test Cases (8 min)
+## Step 3: Traceability Matrix — Requirements to Test Cases (8 min)
 
 ### Narration:
 > "Now that we have test scenarios, let's verify our requirements coverage. The traceability matrix maps every requirement to its test cases and identifies gaps — a critical artifact for Bank Indonesia's quality gate assessment."
 
 ### Steps:
 1. Navigate to **Application QA/QC > Traceability Matrix**
-2. In the **Requirements** section (input 1), paste the same 6 requirements from Act 2
+2. In the **Requirements** section (input 1), paste the same 6 requirements from Step 2
 3. In the **Test Cases** section (input 2), paste:
 
 ### Demo Test Cases Input:
@@ -202,7 +202,7 @@ Expected: Circuit breaker OPEN, requests fast-fail for 30 seconds
 
 ---
 
-## ACT 4: Performance Test Script Generation (8 min)
+## Step 4: Performance Test Script Generation (8 min)
 
 ### Narration:
 > "For the BI-FAST API performance testing, we need JMeter and Gatling scripts that target actual endpoints. Let's generate a load test script from the BI-FAST OpenAPI specification."
@@ -235,7 +235,7 @@ Expected: Circuit breaker OPEN, requests fast-fail for 30 seconds
 
 ---
 
-## ACT 5: IaC Security Review (8 min)
+## Step 5: IaC Security Review (8 min)
 
 ### Narration:
 > "Before deploying our BI-FAST infrastructure, we need security review of the Terraform code. The IaC Review Agent scans for CIS Benchmark violations, hardcoded secrets, and misconfigurations."
@@ -312,7 +312,7 @@ resource "aws_s3_bucket" "bifast_audit_logs" {
 
 ---
 
-## ACT 6: Defect Classification (5 min)
+## Step 6: Defect Classification (5 min)
 
 ### Narration:
 > "When testers find bugs during BI-FAST testing, the Defect Classifier automatically triages them — determining severity, priority, root cause, and which team should fix it."
@@ -360,7 +360,7 @@ cause financial discrepancy if not resolved before go-live.
 
 ---
 
-## ACT 7: Test Report Generation (5 min)
+## Step 7: Test Report Generation (5 min)
 
 ### Narration:
 > "Finally, let's generate the Sprint QC Summary Report that the Project Director reviews at the quality gate meeting."
@@ -387,7 +387,7 @@ cause financial discrepancy if not resolved before go-live.
 
 ---
 
-## ACT 8: Document Audit Trail (3 min)
+## Step 8: Document Audit Trail (3 min)
 
 ### Narration:
 > "All documents uploaded to QAQC4BI are tracked in the audit trail. When the project ends or documents are no longer needed, they can be permanently deleted for data governance compliance."
@@ -426,8 +426,8 @@ cause financial discrepancy if not resolved before go-live.
 
 ## Quick Reference: Demo Data Files
 
-| Act | Input File | Location |
-|-----|-----------|----------|
+| Step | Input File | Location |
+|------|-----------|----------|
 | 2 | BI-FAST BRD | Paste from script above |
 | 3 | Requirements + Test Cases | Paste from script above |
 | 4 | OpenAPI Spec | `samples/swagger-payment-api.json` |
