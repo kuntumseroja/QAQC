@@ -17,6 +17,7 @@ interface Scenario {
   steps: string[];
   expectedResult: string;
   mappedRequirement: string;
+  functionalRequirement: string;
 }
 
 interface GenerateMeta {
@@ -102,6 +103,7 @@ export default function ScenarioGeneratorPage() {
         steps: Array.isArray(s.steps) ? s.steps.map(String) : typeof s.steps === 'string' ? [s.steps] : ['Execute test'],
         expectedResult: String(s.expectedResult || s.expected_result || s.expected || s.outcome || ''),
         mappedRequirement: String(s.mappedRequirement || s.mapped_requirement || s.requirement || s.req_id || `REQ-${String(i + 1).padStart(3, '0')}`),
+        functionalRequirement: String(s.functionalRequirement || s.functional_requirement || s.fr || s.fr_id || s.frId || `FR-${String(i + 1).padStart(3, '0')}`),
       }));
 
       const positive = scenarios.filter(s => s.testType.toLowerCase().includes('positive') || s.testType.toLowerCase().includes('happy')).length;
@@ -130,6 +132,7 @@ export default function ScenarioGeneratorPage() {
   const flattenedScenarios = (result?.scenarios || []).map(s => ({
     scenarioId: s.scenarioId,
     module: s.module,
+    functionalRequirement: s.functionalRequirement,
     testType: s.testType,
     priority: s.priority,
     steps: Array.isArray(s.steps) ? s.steps.join(' -> ') : String(s.steps || ''),
@@ -139,7 +142,12 @@ export default function ScenarioGeneratorPage() {
 
   const columns = [
     { key: 'scenarioId', label: 'Scenario ID', sortable: true, width: '90px' },
-    { key: 'module', label: 'Module', sortable: true, width: '160px' },
+    { key: 'module', label: 'Module', sortable: true, width: '140px' },
+    { key: 'functionalRequirement', label: 'FR', sortable: true, width: '100px',
+      render: (value: unknown) => (
+        <span className="ibm-tag ibm-tag-teal">{String(value)}</span>
+      ),
+    },
     {
       key: 'testType',
       label: 'Test Type',
@@ -159,7 +167,7 @@ export default function ScenarioGeneratorPage() {
       ),
     },
     { key: 'expectedResult', label: 'Expected Result', width: '200px' },
-    { key: 'mappedRequirement', label: 'Mapped Req', sortable: true, width: '120px',
+    { key: 'mappedRequirement', label: 'Mapped Req', sortable: true, width: '110px',
       render: (value: unknown) => (
         <span className="ibm-tag ibm-tag-blue">{String(value)}</span>
       ),

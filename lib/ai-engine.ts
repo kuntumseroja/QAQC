@@ -151,6 +151,7 @@ You MUST respond with a single JSON object (no markdown, no explanation) in this
     {
       "scenarioId": "TC-001",
       "module": "actual module name from the document",
+      "functionalRequirement": "FR-001: short description of the functional requirement being tested",
       "testType": "Positive" | "Negative" | "Edge Case",
       "priority": "Critical" | "High" | "Medium" | "Low",
       "precondition": "specific precondition based on the requirement",
@@ -167,6 +168,8 @@ CRITICAL RULES:
 - Steps must be SPECIFIC to the requirement, not generic like "execute test"
 - Expected results must describe the concrete outcome described in the document
 - Map scenarios to real requirement IDs found in the document (or generate sequential IDs)
+- For each scenario, derive a Functional Requirement (FR) ID and short description (e.g., "FR-001: User Authentication via OTP")
+- Multiple test cases can share the same FR if they test different aspects of the same function
 - Generate 3 scenarios per requirement (positive, negative, edge case)
 - Keep each step description concise (under 100 characters)
 - Keep expectedResult concise (under 150 characters)
@@ -687,13 +690,17 @@ function generateTestScenarios(input: string) {
 
   // Generate 3 scenarios per requirement (positive, negative, edge)
   let tcIdx = 1;
+  let frIdx = 1;
   for (const req of requirements) {
     const keywords = extractKeywords(req.text);
+    const frId = `FR-${String(frIdx++).padStart(3, '0')}`;
+    const frLabel = `${frId}: ${truncateText(req.text, 60)}`;
 
     // Positive scenario
     scenarios.push({
       scenarioId: `TC-${String(tcIdx++).padStart(3, '0')}`,
       module: req.module,
+      functionalRequirement: frLabel,
       testType: 'Positive',
       priority: req.text.toLowerCase().includes('security') || req.text.toLowerCase().includes('critical') ? 'Critical' : 'High',
       precondition: `${req.module} is configured and accessible; valid test data prepared`,
@@ -711,6 +718,7 @@ function generateTestScenarios(input: string) {
     scenarios.push({
       scenarioId: `TC-${String(tcIdx++).padStart(3, '0')}`,
       module: req.module,
+      functionalRequirement: frLabel,
       testType: 'Negative',
       priority: 'Medium',
       precondition: `${req.module} is configured; invalid/missing test data prepared`,
@@ -728,6 +736,7 @@ function generateTestScenarios(input: string) {
     scenarios.push({
       scenarioId: `TC-${String(tcIdx++).padStart(3, '0')}`,
       module: req.module,
+      functionalRequirement: frLabel,
       testType: 'Edge Case',
       priority: req.text.toLowerCase().includes('concurrent') || req.text.toLowerCase().includes('timeout') ? 'High' : 'Low',
       precondition: `${req.module} configured with boundary conditions; edge case data prepared`,
@@ -751,6 +760,7 @@ function generateTestScenarios(input: string) {
       scenarios.push({
         scenarioId: `TC-${String(i + 1).padStart(3, '0')}`,
         module: mod,
+        functionalRequirement: `FR-${String(Math.floor(i / 3) + 1).padStart(3, '0')}: ${mod} functionality`,
         testType: types[i % 3],
         priority: i < 2 ? 'High' : 'Medium',
         precondition: `${mod} module is operational and test environment ready`,
