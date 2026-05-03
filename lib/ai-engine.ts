@@ -31,6 +31,15 @@ export interface AIResponse {
   tokens: { input: number; output: number };
 }
 
+// Per-provider sane defaults for output tokens — use the model's full budget
+// so multi-module FSDs don't get truncated to ~20 scenarios.
+function defaultMaxTokensFor(provider: LLMProvider): number {
+  if (provider === 'anthropic') return 16384;
+  if (provider === 'deepseek') return 8192;   // deepseek-chat hard cap
+  if (provider === 'ollama') return 8192;
+  return 4096;
+}
+
 // Default LLM config - reads from env or falls back to mock
 function getDefaultConfig(): LLMConfig {
   const provider = (process.env.LLM_PROVIDER as LLMProvider) || 'mock';
@@ -52,7 +61,7 @@ function getDefaultConfig(): LLMConfig {
     baseUrl,
     apiKey,
     temperature: 0.3,
-    maxTokens: 4096,
+    maxTokens: defaultMaxTokensFor(provider),
   };
 }
 
@@ -73,7 +82,7 @@ export function buildConfigForProvider(provider: LLMProvider, model?: string): L
     provider === 'deepseek' ? (process.env.DEEPSEEK_API_KEY || '') :
     provider === 'anthropic' ? (process.env.ANTHROPIC_API_KEY || '') :
     '';
-  return { provider, model: resolvedModel, baseUrl, apiKey, temperature: 0.3, maxTokens: 4096 };
+  return { provider, model: resolvedModel, baseUrl, apiKey, temperature: 0.3, maxTokens: defaultMaxTokensFor(provider) };
 }
 
 // Available models for UI selection
