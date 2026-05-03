@@ -1,0 +1,29 @@
+{
+  "pipeline_name": "penjaminan_submission",
+  "sprint": 24,
+  "run_date": "2026-04-13",
+  "stages": [
+    { "name": "01_dukcapil_validation",       "expected_rows": 25, "actual_rows": 22, "tolerance_pct": 0,  "status": "FAIL" },
+    { "name": "02_npwp_format_check",         "expected_rows": 22, "actual_rows": 22, "tolerance_pct": 0,  "status": "WARN", "warnings": 12 },
+    { "name": "03_pefindo_credit_bureau_enrich","expected_rows": 22, "actual_rows": 18, "tolerance_pct": 0, "status": "FAIL", "error": "upstream timeout" },
+    { "name": "04_plafon_bracket_check",      "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" },
+    { "name": "05_t24_account_provision",     "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" },
+    { "name": "06_icpr_signing",              "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" },
+    { "name": "07_peruri_emateral",           "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" },
+    { "name": "08_publish_to_warehouse",      "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" }
+  ],
+  "expected_totals": {
+    "fact_penjaminan": 25,
+    "dim_cif": 25
+  },
+  "actual_totals": {
+    "fact_penjaminan": 18,
+    "dim_cif": 22
+  },
+  "data_quality_rules": [
+    { "rule": "nik must not be null",                        "violations": 3,  "severity": "Critical" },
+    { "rule": "npwp must match XX.XXX.XXX.X-XXX.XXX format","violations": 12, "severity": "Major" },
+    { "rule": "plafon must be > 0",                          "violations": 0,  "severity": "Critical" },
+    { "rule": "produk in (Reguler, Mikro, Korporat)",        "violations": 0,  "severity": "Major" }
+  ]
+}

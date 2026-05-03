@@ -1,0 +1,47 @@
+=================================================================
+JaGuarS ETL Pipeline — Penjaminan Cash Loan Submission
+Sprint 24 · Run 2026-04-13 · Job ID: PJM-RUN-20260413-001
+=================================================================
+
+[2026-04-13 02:00:01] INFO  pipeline=penjaminan_submission stage=start
+[2026-04-13 02:00:02] INFO  source=cif_registrations rows=25 status=OK
+[2026-04-13 02:00:05] INFO  stage=01_dukcapil_validation rows_in=25 rows_out=22 dropped=3 reason="NIK is null"
+[2026-04-13 02:00:05] WARN  stage=01_dukcapil_validation 3 records failed Dukcapil NIK lookup (null NIK upstream)
+[2026-04-13 02:00:09] INFO  stage=02_npwp_format_check rows_in=22 rows_out=22 invalid_format_warnings=12
+[2026-04-13 02:00:09] WARN  stage=02_npwp_format_check 12 NPWP values use legacy hyphen format (XX-XXX-XXX-X-XXX-XXX) — should be XX.XXX.XXX.X-XXX.XXX per DJP spec
+[2026-04-13 02:00:18] INFO  stage=03_pefindo_credit_bureau_enrich rows_in=22 expected=22 attempted=22
+[2026-04-13 02:00:48] WARN  stage=03_pefindo_credit_bureau_enrich response_time=29800ms threshold=15000ms
+[2026-04-13 02:01:18] WARN  stage=03_pefindo_credit_bureau_enrich response_time=30000ms timeout reached
+[2026-04-13 02:01:18] ERROR stage=03_pefindo_credit_bureau_enrich rows_returned=18 expected=22 missing=4 reason="upstream timeout (HTTP 504 from api.pefindo.co.id)"
+[2026-04-13 02:01:18] ERROR stage=03_pefindo_credit_bureau_enrich missing_cif_ids=[CIF-2026-00011,CIF-2026-00014,CIF-2026-00020,CIF-2026-00024]
+[2026-04-13 02:01:18] WARN  stage=03_pefindo_credit_bureau_enrich row_count_mismatch in=22 out=18 delta=-4 (-18.18%)
+[2026-04-13 02:01:22] INFO  stage=04_plafon_bracket_check (POJK 11/2025) rows_in=18 rows_out=18
+[2026-04-13 02:01:22] INFO    bracket_breakdown: <=50M=2 50M-500M=12 500M-1B=3 >1B=1
+[2026-04-13 02:01:25] INFO  stage=05_t24_account_provision rows_in=18 rows_out=18 status=OK
+[2026-04-13 02:01:31] INFO  stage=06_icpr_signing rows_in=18 rows_out=18 status=OK
+[2026-04-13 02:01:35] INFO  stage=07_peruri_emateral rows_in=18 rows_out=18 status=OK
+[2026-04-13 02:01:36] INFO  stage=08_publish_to_warehouse rows=18 target=dwh.fact_penjaminan
+[2026-04-13 02:01:37] INFO  pipeline=penjaminan_submission stage=end status=PARTIAL_SUCCESS duration=96s
+
+SUMMARY
+-------
+  Total CIF read           : 25
+  Dropped (null NIK)       :  3   <-- DATA QUALITY ISSUE (upstream)
+  NPWP format warnings     : 12   <-- DATA QUALITY ISSUE
+  Pefindo enrichment fails :  4   <-- INTEGRATION ISSUE (timeout)
+  Successfully published   : 18   (expected 25 → -28%)
+  Pipeline runtime         : 96s  (avg 64s, +50% slower than baseline)
+
+PEFINDO INTEGRATION HEALTH
+--------------------------
+  Last 10 sprint runs:
+    Sprint 22 (2026-03-30) : OK
+    Sprint 22 (2026-04-02) : OK
+    Sprint 23 (2026-04-04) : TIMEOUT (1 record)        <-- 1st
+    Sprint 23 (2026-04-06) : OK
+    Sprint 23 (2026-04-08) : TIMEOUT (2 records)       <-- 2nd
+    Sprint 24 (2026-04-10) : OK
+    Sprint 24 (2026-04-11) : OK
+    Sprint 24 (2026-04-13) : TIMEOUT (4 records)       <-- 3rd, escalating
+  Recommendation: introduce exponential backoff retry + circuit breaker
+                  before sign-off. Trend is escalating (1 → 2 → 4 records).

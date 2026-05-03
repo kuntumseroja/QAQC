@@ -46,21 +46,22 @@ The Jamkrindo team is shipping the **CIF Registration & Penjaminan Cash Loan** f
 
 ### Step 3 — Budi (QC Analyst) validates the data layer
 
+> **Dummy data files** for this step live in `samples/demo-jamkrindo/` — drop them into the corresponding pages.
+
 1. Sign in as `qc` / `qc123`.
-2. Goes to **Data Analytics → Data Quality Profiler**.
-3. Profiles the post-deploy `cif_registrations` table — finds 3 NULL `nik` values (Critical) and 12 NPWP format violations (Major).
-4. Opens **ETL/Pipeline Validator** — runs the Penjaminan submission pipeline against expected counts; spots a row-count mismatch in the Pefindo enrichment step.
-5. Opens **Defects → Intelligent Defect Classifier**, files a defect with the pipeline log → AI classifies as `Data Integrity / Pefindo / High`.
-6. Opens **Defects → Defect Pattern Analyzer** — sees this is the 3rd Pefindo timeout this sprint → flags as systemic.
+2. Goes to **Data Analytics → Data Quality Profiler** → uploads **`samples/demo-jamkrindo/cif_registrations.csv`** (25 rows). Finds 3 NULL `nik` values (Critical, rows 3/9/15) and 12 NPWP format violations (Major — legacy hyphen format).
+3. Opens **ETL/Pipeline Validator** → uploads **`samples/demo-jamkrindo/pipeline-validation-config.json`** + **`penjaminan-pipeline-log.txt`**. Spots row-count mismatch at stage `03_pefindo_credit_bureau_enrich` (expected 22, actual 18, missing 4 CIFs).
+4. Opens **Defects → Intelligent Defect Classifier** → pastes **`samples/demo-jamkrindo/defect-pefindo-timeout.txt`** → AI classifies as `Data Integrity / Pefindo / High`, suggests retry + circuit breaker + DLQ.
+5. Opens **Defects → Defect Pattern Analyzer** → loads **`samples/demo-jamkrindo/defect-history-sprint22-24.csv`** → pattern `pefindo-timeout` recurs 4× across sprints 22–24, escalating (1 → 2 → 4 records). Flags as systemic.
 
 > **What Budi cares about:** data correctness, pipeline integrity, defect patterns across sprints.
 
 ### Step 4 — Sarah signs off
 
 1. Signs back in as `leader` / `leader123`.
-2. Opens **Defects → Test Report Generator** — pulls a sprint-24 report combining Diana's test pass rate, Budi's data quality findings, and the open defects.
-3. The report shows Pefindo timeout pattern, recommends adding retry logic before sign-off.
-4. Signs off conditional on the Pefindo fix landing first.
+2. Opens **Defects → Test Report Generator** → loads **`samples/demo-jamkrindo/sprint24-test-results.csv`** (98 TC, 91.8% pass rate) plus the open defects from Budi's findings.
+3. Report highlights: Pefindo CB Enrichment lowest pass-rate module (62.5%), 1 Critical open (NULL NIK, DEF-2026-0129), 1 Major open systemic (Pefindo timeout, DEF-2026-0130).
+4. Signs off **conditional on the Pefindo fix (DEF-0130) landing first**.
 
 > **What Sarah cares about:** evidence-based sign-off, traceable risk decisions.
 

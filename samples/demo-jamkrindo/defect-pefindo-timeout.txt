@@ -1,0 +1,56 @@
+DEFECT REPORT — Sprint 24 · Penjaminan Cash Loan
+
+Title:
+  Pefindo credit bureau enrichment times out, dropping CIF records from
+  Penjaminan submission pipeline
+
+Reporter: Budi Santoso (QC Analyst)
+Reported : 2026-04-13 09:14 WIB
+Detected by: ETL Pipeline Validator (PJM-RUN-20260413-001)
+Environment: PROD-LIKE / Sprint 24 release candidate
+
+Summary:
+  The 03_pefindo_credit_bureau_enrich stage of the penjaminan_submission
+  pipeline is failing with HTTP 504 (gateway timeout) when calling
+  api.pefindo.co.id. Today's run lost 4 of 22 records (-18.18%), which
+  silently dropped 4 high-value CIF records (CIF-2026-00011, -00014,
+  -00020, -00024) from the warehouse fact table dwh.fact_penjaminan.
+
+Severity:
+  HIGH — financial data integrity issue. Affected CIFs include 1
+  Korporat (Rp 2B plafon, CIF-2026-00011) and 1 above-1B (CIF-2026-00024).
+
+Steps to reproduce:
+  1. Run pipeline=penjaminan_submission for sprint 24 cohort
+  2. Stage 03 Pefindo enrichment hits 30s timeout for 4 records
+  3. Pipeline continues with 18 of 22 expected rows
+  4. dwh.fact_penjaminan ends with 18 rows instead of 25
+
+Expected:
+  - Pefindo lookup succeeds OR
+  - Failed records are retried with exponential backoff OR
+  - Failed records are routed to a dead-letter queue and surfaced for
+    operator follow-up — never silently dropped.
+
+Actual:
+  - 4 records silently dropped, no alerting, no retry, no DLQ.
+  - Pipeline reports PARTIAL_SUCCESS so downstream consumers don't notice.
+
+Pattern history (cross-sprint):
+  Sprint 23 (2026-04-04) : Pefindo timeout, 1 record dropped
+  Sprint 23 (2026-04-08) : Pefindo timeout, 2 records dropped
+  Sprint 24 (2026-04-13) : Pefindo timeout, 4 records dropped  <-- escalating
+
+Recommended fix:
+  1. Wrap Pefindo client in retry policy: 3 attempts, exponential backoff
+     (1s, 4s, 16s), total budget 90s
+  2. Add circuit breaker — open at 50% failure rate over 5-min window
+  3. Failed records → dead-letter queue (Kafka topic: penjaminan.dlq)
+  4. Alert PagerDuty if DLQ depth > 0 at end of run
+  5. Pipeline final status = FAIL (not PARTIAL_SUCCESS) when any record
+     reaches DLQ — forces explicit operator acknowledgement
+
+Attachments:
+  - penjaminan-pipeline-log.txt
+  - pipeline-validation-config.json
+  - defect-history-sprint22-24.csv

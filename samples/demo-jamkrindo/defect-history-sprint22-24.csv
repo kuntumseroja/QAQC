@@ -1,0 +1,14 @@
+defect_id,sprint,reported_date,module,component,title,severity,priority,status,reporter,assignee,resolved_date,root_cause,recurring_tag
+DEF-2026-0118,22,2026-03-28,Penjaminan,Reporting,Sprint 22 month-end report off by 1 row,Low,Low,RESOLVED,budi.santoso,andi.dev,2026-03-31,Off-by-one in date range filter,
+DEF-2026-0119,22,2026-03-29,CIF Registration,UI,Long Indonesian names (>50 chars) get truncated,Minor,Low,RESOLVED,diana.putri,sari.dev,2026-04-01,Database column too small,
+DEF-2026-0120,22,2026-03-30,Penjaminan,Pefindo,Pefindo enrichment timeout (1 record dropped),Major,High,RESOLVED,budi.santoso,andi.dev,2026-04-02,Network blip — added 30s timeout,pefindo-timeout
+DEF-2026-0121,22,2026-04-01,Authentication,Session,User session expires too aggressively (15min),Minor,Medium,RESOLVED,diana.putri,sari.dev,2026-04-04,Hardcoded TTL — moved to config,
+DEF-2026-0122,23,2026-04-04,Penjaminan,Pefindo,Pefindo enrichment timeout — 1 record dropped from sprint 23 batch,Major,High,RESOLVED,budi.santoso,andi.dev,2026-04-05,Same as DEF-0120; increased timeout to 60s (insufficient),pefindo-timeout
+DEF-2026-0123,23,2026-04-05,Master Data,LOV,New PKS partner code not in dropdown,Minor,Medium,RESOLVED,budi.santoso,sari.dev,2026-04-06,Master sync job missed,
+DEF-2026-0124,23,2026-04-06,CIF Registration,Validation,NIK validation accepts 15-digit (should be 16),Major,High,RESOLVED,diana.putri,andi.dev,2026-04-07,Regex bug,
+DEF-2026-0125,23,2026-04-08,Penjaminan,Pefindo,Pefindo enrichment timeout — 2 records dropped this run,Major,High,RESOLVED,budi.santoso,andi.dev,2026-04-09,Pefindo upstream slow; bumped to 30s; not fixed,pefindo-timeout
+DEF-2026-0126,23,2026-04-09,Workflow,Approval,Checker approval email not delivered,Minor,Medium,RESOLVED,diana.putri,sari.dev,2026-04-10,SMTP relay misconfig,
+DEF-2026-0127,24,2026-04-10,CIF Registration,Validation,NPWP accepts hyphen format (should be dotted per DJP),Minor,Low,OPEN,budi.santoso,sari.dev,,Legacy data carries hyphen format,
+DEF-2026-0128,24,2026-04-11,Reports,Export,Excel export missing column for plafon bracket,Low,Low,IN_PROGRESS,diana.putri,andi.dev,,Bracket column added in sprint 24 schema; export not updated,
+DEF-2026-0129,24,2026-04-12,CIF Registration,DataIntegrity,3 rows with NULL nik in cif_registrations,Critical,High,OPEN,budi.santoso,andi.dev,,Upstream form allows save-as-draft without NIK,
+DEF-2026-0130,24,2026-04-13,Penjaminan,Pefindo,Pefindo enrichment timeout — 4 records dropped (escalating pattern),Major,High,OPEN,budi.santoso,,,Same as DEF-0120/0122/0125; pattern is systemic; needs retry+circuit breaker,pefindo-timeout
