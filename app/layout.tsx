@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar from "@/components/sidebar";
-import Header from "@/components/header";
+import Chrome from "@/components/chrome";
 
 export const metadata: Metadata = {
   title: "QAQC4BI - AI-Powered QA/QC Platform",
@@ -21,14 +20,8 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="h-full flex">
-        <Sidebar />
-        <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto bg-[#f4f4f4]">
-            {children}
-          </main>
-        </div>
+      <body className="h-full">
+        <Chrome>{children}</Chrome>
       </body>
     </html>
   );

@@ -1,7 +1,8 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import { Bell, Settings, User, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Bell, Settings, Search, LogOut } from 'lucide-react';
 
 const pathNames: Record<string, { title: string; breadcrumb: string[] }> = {
   '/dashboard': { title: 'Executive Dashboard', breadcrumb: ['Home', 'Dashboard'] },
@@ -26,9 +27,31 @@ const pathNames: Record<string, { title: string; breadcrumb: string[] }> = {
   '/documents': { title: 'Document Audit Trail', breadcrumb: ['Home', 'Documents'] },
 };
 
+interface MeUser {
+  username: string;
+  name: string;
+  role: string;
+  roleLabel: string;
+  initials: string;
+  color: string;
+}
+
 export default function Header() {
   const pathname = usePathname();
+  const router = useRouter();
   const info = pathNames[pathname] || { title: 'QAQC4BI', breadcrumb: ['Home'] };
+  const [user, setUser] = useState<MeUser | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => setUser(d.user || null)).catch(() => setUser(null));
+  }, [pathname]);
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+    router.refresh();
+  };
 
   return (
     <header className="h-12 bg-white border-b border-[#e0e0e0] flex items-center justify-between px-4 flex-shrink-0">
@@ -56,11 +79,40 @@ export default function Header() {
         <button className="w-8 h-8 flex items-center justify-center text-[#525252] hover:bg-[#e0e0e0] transition-colors">
           <Settings size={16} />
         </button>
-        <div className="ml-2 pl-2 border-l border-[#e0e0e0] flex items-center gap-2">
-          <div className="w-7 h-7 bg-[#0f62fe] rounded-full flex items-center justify-center">
-            <User size={14} className="text-white" />
-          </div>
-          <span className="text-sm text-[#161616]">Lead Tester</span>
+
+        {/* User menu */}
+        <div className="ml-2 pl-2 border-l border-[#e0e0e0] relative">
+          <button
+            onClick={() => setOpen(o => !o)}
+            className="flex items-center gap-2 hover:bg-[#f4f4f4] px-2 py-1 transition-colors"
+          >
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold"
+              style={{ background: user?.color || '#0f62fe' }}
+            >
+              {user?.initials || '··'}
+            </div>
+            <div className="text-left leading-tight">
+              <div className="text-xs font-medium text-[#161616]">{user?.name || 'Guest'}</div>
+              <div className="text-[10px] text-[#6f6f6f]">{user?.roleLabel || 'Not signed in'}</div>
+            </div>
+          </button>
+
+          {open && user && (
+            <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-[#e0e0e0] shadow-lg z-50">
+              <div className="p-3 border-b border-[#e0e0e0]">
+                <div className="text-xs font-medium text-[#161616]">{user.name}</div>
+                <div className="text-[11px] text-[#6f6f6f]">{user.roleLabel}</div>
+                <div className="text-[10px] text-[#a8a8a8] font-mono mt-1">@{user.username}</div>
+              </div>
+              <button
+                onClick={logout}
+                className="w-full text-left px-3 py-2 text-xs text-[#161616] hover:bg-[#f4f4f4] flex items-center gap-2"
+              >
+                <LogOut size={12} /> Sign out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>
