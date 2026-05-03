@@ -8,7 +8,7 @@ Sprint 24 · Run 2026-04-13 · Job ID: PJM-RUN-20260413-001
 [2026-04-13 02:00:05] INFO  stage=01_dukcapil_validation rows_in=25 rows_out=22 dropped=3 reason="NIK is null"
 [2026-04-13 02:00:05] WARN  stage=01_dukcapil_validation 3 records failed Dukcapil NIK lookup (null NIK upstream)
 [2026-04-13 02:00:09] INFO  stage=02_npwp_format_check rows_in=22 rows_out=22 invalid_format_warnings=12
-[2026-04-13 02:00:09] WARN  stage=02_npwp_format_check 12 NPWP values use legacy hyphen format (XX-XXX-XXX-X-XXX-XXX) — should be XX.XXX.XXX.X-XXX.XXX per DJP spec
+[2026-04-13 02:00:09] WARN  stage=02_npwp_format_check 16 NPWP values use legacy hyphen format (XX-XXX-XXX-X-XXX-XXX) — should be XX.XXX.XXX.X-XXX.XXX per DJP spec
 [2026-04-13 02:00:18] INFO  stage=03_pefindo_credit_bureau_enrich rows_in=22 expected=22 attempted=22
 [2026-04-13 02:00:48] WARN  stage=03_pefindo_credit_bureau_enrich response_time=29800ms threshold=15000ms
 [2026-04-13 02:01:18] WARN  stage=03_pefindo_credit_bureau_enrich response_time=30000ms timeout reached
@@ -27,7 +27,7 @@ SUMMARY
 -------
   Total CIF read           : 25
   Dropped (null NIK)       :  3   <-- DATA QUALITY ISSUE (upstream)
-  NPWP format warnings     : 12   <-- DATA QUALITY ISSUE
+  NPWP format warnings     : 16   <-- DATA QUALITY ISSUE
   Pefindo enrichment fails :  4   <-- INTEGRATION ISSUE (timeout)
   Successfully published   : 18   (expected 25 → -28%)
   Pipeline runtime         : 96s  (avg 64s, +50% slower than baseline)

@@ -144,7 +144,7 @@ export default function DataProfilerPage({
           uniqueCount: Number(c.uniqueCount || c.unique_count || c.unique || c.distinct || 0),
           completeness: String(c.completeness || c.completeness_pct || '100%'),
           validity: String(c.validity || c.validity_pct || '100%'),
-          anomalies: Number(c.anomalies || c.anomaly_count || 0),
+          anomalies: Array.isArray(c.anomalies) ? c.anomalies.length : Number(c.anomalies || c.anomaly_count || 0),
         }));
 
         const as = raw.anomalySummary || raw.anomaly_summary || raw.anomalies || {};

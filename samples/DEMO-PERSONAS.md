@@ -49,7 +49,7 @@ The Jamkrindo team is shipping the **CIF Registration & Penjaminan Cash Loan** f
 > **Dummy data files** for this step live in `samples/demo-jamkrindo/` — drop them into the corresponding pages.
 
 1. Sign in as `qc` / `qc123`.
-2. Goes to **Data Analytics → Data Quality Profiler** → uploads **`samples/demo-jamkrindo/cif_registrations.csv`** (25 rows). Finds 3 NULL `nik` values (Critical, rows 3/9/15) and 12 NPWP format violations (Major — legacy hyphen format).
+2. Goes to **Data Analytics → Data Quality Profiler** → uploads **`samples/demo-jamkrindo/cif_registrations.csv`** (25 rows). Finds 3 NULL `nik` values (Critical, rows 3/9/15) and 16 NPWP format violations (Major — legacy hyphen format).
 3. Opens **ETL/Pipeline Validator** → uploads **`samples/demo-jamkrindo/pipeline-validation-config.json`** + **`penjaminan-pipeline-log.txt`**. Spots row-count mismatch at stage `03_pefindo_credit_bureau_enrich` (expected 22, actual 18, missing 4 CIFs).
 4. Opens **Defects → Intelligent Defect Classifier** → pastes **`samples/demo-jamkrindo/defect-pefindo-timeout.txt`** → AI classifies as `Data Integrity / Pefindo / High`, suggests retry + circuit breaker + DLQ.
 5. Opens **Defects → Defect Pattern Analyzer** → loads **`samples/demo-jamkrindo/defect-history-sprint22-24.csv`** → pattern `pefindo-timeout` recurs 4× across sprints 22–24, escalating (1 → 2 → 4 records). Flags as systemic.

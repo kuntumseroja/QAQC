@@ -257,7 +257,56 @@ You MUST respond with a single JSON object (no markdown, no explanation) in this
 }
 
 CRITICAL: All code in "content" fields must be a valid JSON string with escaped newlines (\\n), tabs (\\t), and quotes (\\"). Generate Python code for Selenium, Groovy for Katalon. Keep each file concise.`,
-  'data-profiler': 'You are a Data Quality Engineer following DAMA-DMBOK and ISO 8000 standards. Analyze the provided dataset and output a JSON object with this EXACT structure: { "datasetName": "string", "rowCount": number, "columnCount": number, "profileDate": "ISO date string", "columns": [{ "column": "name", "dataType": "type", "totalRows": number, "nullCount": number, "nullRate": "percent string", "uniqueCount": number, "completeness": "percent string", "validity": "percent string", "anomalies": number }], "qualityDimensions": { "accuracy": { "score": 0-100, "status": "PASS or FAIL", "threshold": 95 }, "completeness": {...}, "consistency": {...}, "timeliness": {...}, "uniqueness": {...}, "validity": {...} }, "anomalySummary": { "total": number, "critical": number, "medium": number, "low": number } }. Analyze every column in the input data. Detect real anomalies like nulls, duplicates, invalid formats, outliers.',
+  'data-profiler': `You are a Data Quality Engineer following DAMA-DMBOK and ISO 8000 standards.
+
+Analyze the provided dataset (CSV) and output a JSON object with this EXACT structure:
+{
+  "datasetName": "string",
+  "rowCount": number,
+  "columnCount": number,
+  "profileDate": "ISO date string",
+  "columns": [
+    {
+      "column": "name",
+      "dataType": "string|numeric|datetime|boolean",
+      "totalRows": number,
+      "nullCount": number,
+      "nullRate": "12.00%",
+      "uniqueCount": number,
+      "completeness": "88.00%",
+      "validity": "88.00%",
+      "anomalies": [
+        { "type": "null_values|format_violation|duplicate|outlier", "description": "12 NPWP values use hyphen format instead of dotted DJP format", "severity": "Critical|Major|Minor" }
+      ]
+    }
+  ],
+  "qualityDimensions": {
+    "accuracy":     { "score": 0-100, "status": "PASS|FAIL", "threshold": 95 },
+    "completeness": { "score": 0-100, "status": "PASS|FAIL", "threshold": 98 },
+    "consistency":  { "score": 0-100, "status": "PASS|FAIL", "threshold": 95 },
+    "timeliness":   { "score": 0-100, "status": "PASS|FAIL", "threshold": 95 },
+    "uniqueness":   { "score": 0-100, "status": "PASS|FAIL", "threshold": 99 },
+    "validity":     { "score": 0-100, "status": "PASS|FAIL", "threshold": 95 }
+  },
+  "anomalySummary": { "total": number, "critical": number, "medium": number, "low": number }
+}
+
+CRITICAL FORMAT RULES — apply these to every column whose name matches:
+- nik / NIK         → must be EXACTLY 16 digits (no spaces, no dashes)
+- npwp / NPWP       → must match dotted DJP format XX.XXX.XXX.X-XXX.XXX (e.g. 12.345.678.9-012.000). The hyphen format XX-XXX-XXX-X-XXX-XXX is INVALID.
+- email             → RFC-5322 local@domain.tld
+- no_hp / phone / hp → starts with 08 or +628, total 10–14 digits
+- tgl_* / *_at / *_date → ISO YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
+- plafon / amount / jumlah → positive integer
+
+For each column, COUNT actual violations against these rules in the data and put them in "anomalies" with severity.
+- "anomalies" MUST be an array (even if empty []), not a number.
+- Severity guidance: NIK violation = Critical, NPWP/email/date = Major, phone = Minor.
+- "validity" % = (rows with no nulls AND no format violations) / totalRows * 100.
+
+For anomalySummary: total = sum of all anomalies across columns, with critical/medium/low buckets matching severity (medium = Major).
+
+Analyze every column. Be exhaustive. No markdown, JSON only.`,
   'pipeline-validator': 'You are a Data Pipeline Validation expert. Output JSON: { "pipelineName": "string", "rules": [{ "rule": "description", "source": "source value", "target": "target value", "status": "PASS or FAIL", "sql": "SQL query", "details": "optional detail" }], "summary": { "total": number, "passed": number, "failed": number, "passRate": "percent string" } }. Generate real SQL validation queries based on the tables and columns in the input.',
   'viz-validator': 'You are a Data Visualization QA expert. Output JSON: { "dashboardName": "string", "checks": [{ "check": "description of what was checked", "status": "PASS or WARNING or FAIL", "details": "explanation" }], "summary": { "pass": number, "warning": number, "fail": number } }. Check chart types, data accuracy, labels, formatting, accessibility, responsiveness.',
   'iac-review': 'You are a Cloud Infrastructure Security Engineer. Review the provided IaC code and output JSON: { "filesReviewed": number, "findings": [{ "severity": "Critical/High/Medium/Low", "file": "filename", "line": number, "rule": "CIS control or best practice", "finding": "description of issue", "recommendation": "fix suggestion", "fix": "code snippet" }], "summary": { "critical": number, "high": number, "medium": number, "low": number }, "complianceScore": 0-100 }. Scan for real security issues: open CIDRs, hardcoded secrets, missing encryption, wildcard IAM, public access, missing tags.',
@@ -1345,12 +1394,34 @@ function generateDataProfile(input: string) {
     rowCount = isCsv ? dataRows.length : 2347891;
   }
 
+  // Format validators for well-known Indonesian / banking columns.
+  // Returns { invalid: count, rule: human-readable rule, severity }.
+  function validateColumnFormat(colName: string, values: string[]): { invalid: number; rule: string; severity: 'Critical' | 'Major' | 'Minor' } | null {
+    const lc = colName.toLowerCase();
+    const checks: Array<{ match: RegExp; rule: string; valid: RegExp; severity: 'Critical' | 'Major' | 'Minor' }> = [
+      { match: /\bnik\b/,                     rule: 'NIK must be exactly 16 digits',                       valid: /^\d{16}$/,                                                  severity: 'Critical' },
+      { match: /\bnpwp\b/,                    rule: 'NPWP must follow DJP format XX.XXX.XXX.X-XXX.XXX',   valid: /^\d{2}\.\d{3}\.\d{3}\.\d{1}-\d{3}\.\d{3}$/,                  severity: 'Major' },
+      { match: /\bnpwp16\b|npwp_16/,          rule: 'NPWP-16 must be exactly 16 digits (post-2024)',       valid: /^\d{16}$/,                                                  severity: 'Major' },
+      { match: /^email$|_email$/,             rule: 'Email must be a valid RFC-5322 address',              valid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,                                severity: 'Major' },
+      { match: /\b(no_hp|phone|telp|hp)\b/,   rule: 'Phone must be Indonesian format starting with 08',    valid: /^(\+?62|0)8\d{8,12}$/,                                      severity: 'Minor' },
+      { match: /^tgl|date$|_at$|_date/,       rule: 'Date must be ISO YYYY-MM-DD or YYYY-MM-DD HH:MM:SS',  valid: /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$/,                  severity: 'Major' },
+      { match: /\b(plafon|amount|jumlah)\b/,  rule: 'Amount must be a positive integer (no decimals)',     valid: /^\d+$/,                                                     severity: 'Major' },
+    ];
+    for (const c of checks) {
+      if (c.match.test(lc)) {
+        const invalid = values.filter(v => v && !c.valid.test(v)).length;
+        return { invalid, rule: c.rule, severity: c.severity };
+      }
+    }
+    return null;
+  }
+
   // Build per-column profile
   const profile = columns.map((col, colIdx) => {
     const colLower = col.toLowerCase();
     let nullCount = 0;
     let uniqueValues = new Set<string>();
-    let nonEmptyCount = 0;
+    const nonNullValues: string[] = [];
 
     if (dataRows.length > 0) {
       // Analyze actual data
@@ -1359,23 +1430,52 @@ function generateDataProfile(input: string) {
         if (!val || val.toLowerCase() === 'null' || val === 'NA' || val === 'N/A' || val === '') {
           nullCount++;
         } else {
-          nonEmptyCount++;
+          nonNullValues.push(val);
           uniqueValues.add(val);
         }
       }
     } else {
       // Simulate for non-CSV input
       nullCount = Math.floor(Math.random() * 50);
-      nonEmptyCount = rowCount - nullCount;
       uniqueValues = new Set(Array.from({ length: colLower.includes('id') ? rowCount : Math.min(rowCount, Math.floor(Math.random() * 1000)) }, (_, i) => String(i)));
     }
 
     const totalRows = dataRows.length > 0 ? dataRows.length : rowCount;
-    const guessedType = colLower.includes('amount') || colLower.includes('price') || colLower.includes('total') || colLower.includes('count') || colLower.includes('qty') ? 'numeric'
-      : colLower.includes('date') || colLower.includes('_at') || colLower.includes('time') || colLower.includes('created') || colLower.includes('updated') ? 'datetime'
-      : colLower.includes('id') || colLower.includes('code') || colLower.includes('key') ? 'varchar'
+    const guessedType = colLower.includes('amount') || colLower.includes('price') || colLower.includes('total') || colLower.includes('count') || colLower.includes('qty') || colLower.includes('plafon') ? 'numeric'
+      : colLower.includes('date') || colLower.includes('_at') || colLower.includes('time') || colLower.includes('created') || colLower.includes('updated') || colLower.startsWith('tgl') ? 'datetime'
       : colLower.includes('flag') || colLower.includes('is_') || colLower.includes('has_') ? 'boolean'
-      : 'varchar';
+      : 'string';
+
+    // Format validation against known patterns
+    const formatCheck = dataRows.length > 0 ? validateColumnFormat(col, nonNullValues) : null;
+    const formatInvalid = formatCheck?.invalid ?? 0;
+
+    // Validity = (non-null AND format-valid) / total
+    const validCount = (totalRows - nullCount) - formatInvalid;
+    const validityPct = totalRows > 0 ? (validCount / totalRows) * 100 : 100;
+
+    type Anomaly = { type: string; description: string; severity: 'Critical' | 'Major' | 'Minor' | 'Medium' };
+    const anomalies: Anomaly[] = [];
+
+    // Null anomalies
+    if (nullCount > 0) {
+      const nullPct = (nullCount / totalRows) * 100;
+      const nullSeverity: Anomaly['severity'] = nullPct >= 5 ? 'Critical' : nullPct >= 1 ? 'Major' : 'Minor';
+      anomalies.push({
+        type: 'null_values',
+        description: `${nullCount} null value(s) (${nullPct.toFixed(1)}%) in column ${col}`,
+        severity: nullSeverity,
+      });
+    }
+
+    // Format anomalies
+    if (formatCheck && formatCheck.invalid > 0) {
+      anomalies.push({
+        type: 'format_violation',
+        description: `${formatCheck.invalid} value(s) violate rule: ${formatCheck.rule}`,
+        severity: formatCheck.severity,
+      });
+    }
 
     return {
       column: col,
@@ -1385,14 +1485,19 @@ function generateDataProfile(input: string) {
       nullRate: totalRows > 0 ? `${((nullCount / totalRows) * 100).toFixed(2)}%` : '0.00%',
       uniqueCount: uniqueValues.size || (colLower.includes('id') ? totalRows : Math.floor(Math.random() * 100000)),
       completeness: totalRows > 0 ? `${(((totalRows - nullCount) / totalRows) * 100).toFixed(2)}%` : '100.00%',
-      validity: `${(95 + Math.random() * 4.5).toFixed(2)}%`,
-      anomalies: nullCount > totalRows * 0.05 ? [{ type: 'high_nulls', description: `${nullCount} null values (${((nullCount / totalRows) * 100).toFixed(1)}%) in column ${col}`, severity: 'Medium' }]
-        : Math.random() > 0.7 ? [{ type: 'outlier', description: `Z-score > 3.0 detected for ${Math.floor(Math.random() * 10)} records in ${col}`, severity: 'Medium' }] : [],
+      validity: `${validityPct.toFixed(2)}%`,
+      anomalies,
     };
   });
 
   const totalAnomalies = profile.reduce((sum, p) => sum + p.anomalies.length, 0);
   const avgCompleteness = profile.reduce((sum, p) => sum + parseFloat(p.completeness), 0) / profile.length;
+  const avgValidity = profile.reduce((sum, p) => sum + parseFloat(p.validity), 0) / profile.length;
+
+  const allAnomalies = profile.flatMap(p => p.anomalies);
+  const critical = allAnomalies.filter(a => a.severity === 'Critical').length;
+  const major = allAnomalies.filter(a => a.severity === 'Major').length;
+  const minor = allAnomalies.filter(a => a.severity === 'Minor' || a.severity === 'Medium').length;
 
   return {
     datasetName: isCsv ? `Uploaded CSV (${columns.length} columns, ${rowCount} rows)` : (text.substring(0, 60) || 'Dataset'),
@@ -1401,14 +1506,14 @@ function generateDataProfile(input: string) {
     profileDate: new Date().toISOString(),
     columns: profile,
     qualityDimensions: {
-      accuracy: { score: +(96 + Math.random() * 3).toFixed(1), status: 'PASS', threshold: 95 },
+      accuracy: { score: +avgValidity.toFixed(1), status: avgValidity >= 95 ? 'PASS' : 'FAIL', threshold: 95 },
       completeness: { score: +avgCompleteness.toFixed(1), status: avgCompleteness >= 98 ? 'PASS' : 'WARNING', threshold: 98 },
       consistency: { score: +(93 + Math.random() * 5).toFixed(1), status: 'PASS', threshold: 95 },
       timeliness: { score: +(97 + Math.random() * 2).toFixed(1), status: 'PASS', threshold: 95 },
       uniqueness: { score: +(98 + Math.random() * 1.5).toFixed(1), status: 'PASS', threshold: 99 },
-      validity: { score: +(96 + Math.random() * 3).toFixed(1), status: 'PASS', threshold: 95 },
+      validity: { score: +avgValidity.toFixed(1), status: avgValidity >= 95 ? 'PASS' : 'FAIL', threshold: 95 },
     },
-    anomalySummary: { total: totalAnomalies, critical: 0, medium: totalAnomalies, low: 0 },
+    anomalySummary: { total: totalAnomalies, critical, medium: major, low: minor },
   };
 }
 

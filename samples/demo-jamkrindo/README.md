@@ -21,8 +21,8 @@ The Tester (Diana) uses the existing FSDs in `Q/jamkrindo/` (already gitignored 
 ### Data Quality Profiler (Budi)
 Profiling `cif_registrations.csv` should surface:
 - **Critical**: 3 NULL `nik` values (rows 3, 9, 15 → CIF-2026-00003 / 00009 / 00015)
-- **Major**: 12 NPWP format violations (legacy hyphen format `XX-XXX-XXX-X-XXX-XXX` instead of dotted `XX.XXX.XXX.X-XXX.XXX`)
-- 25 rows total, 22 with valid NIK, 13 with valid NPWP
+- **Major**: 16 NPWP format violations (legacy hyphen format `XX-XXX-XXX-X-XXX-XXX` instead of dotted `XX.XXX.XXX.X-XXX.XXX`)
+- 25 rows total, 22 with valid NIK, 9 with valid NPWP (rows 1–9 use dotted format; rows 10–25 use legacy hyphen)
 
 ### Pipeline Validator (Budi)
 Validating against `pipeline-validation-config.json`:

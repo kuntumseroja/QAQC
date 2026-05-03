@@ -22,7 +22,7 @@
   },
   "data_quality_rules": [
     { "rule": "nik must not be null",                        "violations": 3,  "severity": "Critical" },
-    { "rule": "npwp must match XX.XXX.XXX.X-XXX.XXX format","violations": 12, "severity": "Major" },
+    { "rule": "npwp must match XX.XXX.XXX.X-XXX.XXX format","violations": 16, "severity": "Major" },
     { "rule": "plafon must be > 0",                          "violations": 0,  "severity": "Critical" },
     { "rule": "produk in (Reguler, Mikro, Korporat)",        "violations": 0,  "severity": "Major" }
   ]
