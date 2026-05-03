@@ -2,6 +2,44 @@ import { NextResponse } from 'next/server';
 import { processAI, buildConfigForProvider, type LLMProvider } from '@/lib/ai-engine';
 import { eventBus, TOPICS } from '@/lib/event-bus';
 
+// Allow long-running multi-pass generation (Railway proxy is generous on Node runtime).
+export const runtime = 'nodejs';
+export const maxDuration = 300; // seconds
+
+// Limit how many module calls run in parallel — protects Railway container
+// from CPU/memory spikes and prevents upstream API rate-limit cascades.
+const MAX_PARALLEL_MODULES = 3;
+// Cap total modules per request so a runaway plan doesn't spawn 50 calls.
+const MAX_MODULES_PER_REQUEST = 12;
+// Per-call timeout (ms) — if a single module hangs we abandon it instead of
+// letting the whole request time out at the proxy.
+const PER_MODULE_TIMEOUT_MS = 90_000;
+
+async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return await Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+  ]);
+}
+
+// Run an array of async tasks with a concurrency limit.
+async function runWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T, idx: number) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let cursor = 0;
+  async function next() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      try {
+        results[idx] = { status: 'fulfilled', value: await worker(items[idx], idx) };
+      } catch (e) {
+        results[idx] = { status: 'rejected', reason: e };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => next()));
+  return results;
+}
+
 interface Scenario {
   scenarioId?: string;
   module?: string;
@@ -58,7 +96,11 @@ Aim for 8–25 modules. Each "expectedScenarios" should reflect realistic covera
   });
 
   const planResult = planResp.result as { modules?: Array<{ name: string; chapter?: string; summary?: string; expectedScenarios?: number }> };
-  const modules = Array.isArray(planResult?.modules) ? planResult.modules : [];
+  let modules = Array.isArray(planResult?.modules) ? planResult.modules : [];
+  if (modules.length > MAX_MODULES_PER_REQUEST) {
+    console.log(`[scenario-gen] plan returned ${modules.length} modules, capping at ${MAX_MODULES_PER_REQUEST}`);
+    modules = modules.slice(0, MAX_MODULES_PER_REQUEST);
+  }
 
   if (modules.length === 0) {
     // Planning failed — fall back to a single-pass call
@@ -84,11 +126,11 @@ Aim for 8–25 modules. Each "expectedScenarios" should reflect realistic covera
     };
   }
 
-  // ---- Pass 2: per-module generation in parallel ----
-  const perModuleResults = await Promise.allSettled(
-    modules.map(async (mod) => {
-      const moduleScenarioCount = Math.max(5, Math.min(20, mod.expectedScenarios || 10));
-      return processAI({
+  // ---- Pass 2: per-module generation, throttled to MAX_PARALLEL_MODULES ----
+  const perModuleResults = await runWithConcurrency(modules, MAX_PARALLEL_MODULES, async (mod) => {
+    const moduleScenarioCount = Math.max(5, Math.min(20, mod.expectedScenarios || 10));
+    return withTimeout(
+      processAI({
         service: 'scenario-gen',
         prompt: `Generate ${moduleScenarioCount}+ test scenarios FOR THIS SPECIFIC MODULE ONLY:
 
@@ -103,9 +145,11 @@ Set the "module" field of every scenario to exactly: "${mod.name}".`,
         input: inputContent,
         options,
         llmConfig,
-      });
-    }),
-  );
+      }),
+      PER_MODULE_TIMEOUT_MS,
+      `module "${mod.name}"`,
+    );
+  });
 
   // ---- Merge ----
   const allScenarios: Scenario[] = [];
