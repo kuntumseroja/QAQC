@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FlaskConical, ArrowLeft, Loader2, CheckCircle, AlertCircle, Layers } from 'lucide-react';
+import { FlaskConical, ArrowLeft, Loader2, CheckCircle, AlertCircle, Layers, ListChecks } from 'lucide-react';
 import Link from 'next/link';
 import FileUpload from '@/components/file-upload';
 import DataTable from '@/components/data-table';
@@ -42,6 +42,13 @@ interface GenerateResult {
   _meta?: GenerateMeta;
 }
 
+interface PlanModule {
+  name: string;
+  chapter?: string;
+  summary?: string;
+  expectedScenarios?: number;
+}
+
 export default function ScenarioGeneratorPage() {
   const [fileContent, setFileContent] = useState('');
   const [fileName, setFileName] = useState('');
@@ -52,6 +59,12 @@ export default function ScenarioGeneratorPage() {
   const [provider, setProvider] = useState<string>('');
   const [model, setModel] = useState<string>('');
   const [availableModels, setAvailableModels] = useState<Record<string, { id: string; name: string }[]>>({});
+
+  // Plan-then-generate state
+  const [planning, setPlanning] = useState(false);
+  const [planModules, setPlanModules] = useState<PlanModule[] | null>(null);
+  const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<{ done: number; total: number; current?: string } | null>(null);
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(data => {
@@ -69,6 +82,136 @@ export default function ScenarioGeneratorPage() {
     }
   }, [provider, availableModels]);
 
+  // Extract scenarios from any LLM response shape (handles snake_case, alt keys, plain arrays).
+  const extractScenarios = (raw: Record<string, unknown>): Scenario[] => {
+    let arr: unknown[] = [];
+    if (Array.isArray(raw.scenarios)) arr = raw.scenarios;
+    else if (Array.isArray(raw)) arr = raw;
+    else if (Array.isArray((raw as Record<string, unknown>).test_scenarios)) arr = (raw as { test_scenarios: unknown[] }).test_scenarios;
+    else if (Array.isArray((raw as Record<string, unknown>).testScenarios)) arr = (raw as { testScenarios: unknown[] }).testScenarios;
+    else {
+      for (const key of Object.keys(raw)) {
+        const v = (raw as Record<string, unknown>)[key];
+        if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'object') {
+          arr = v as unknown[];
+          break;
+        }
+      }
+    }
+    return (arr as Record<string, unknown>[]).map((s, i): Scenario => ({
+      scenarioId: String(s.scenarioId || s.scenario_id || s.id || `TC-${String(i + 1).padStart(3, '0')}`),
+      module: String(s.module || s.category || s.component || 'General'),
+      testType: String(s.testType || s.test_type || s.type || 'Positive') as Scenario['testType'],
+      priority: String(s.priority || s.severity || 'Medium'),
+      precondition: String(s.precondition || s.preconditions || s.prerequisites || ''),
+      steps: Array.isArray(s.steps) ? s.steps.map(String) : typeof s.steps === 'string' ? [s.steps] : ['Execute test'],
+      expectedResult: String(s.expectedResult || s.expected_result || s.expected || s.outcome || ''),
+      mappedRequirement: String(s.mappedRequirement || s.mapped_requirement || s.requirement || s.req_id || `REQ-${String(i + 1).padStart(3, '0')}`),
+      functionalRequirement: String(s.functionalRequirement || s.functional_requirement || s.fr || s.fr_id || s.frId || `FR-${String(i + 1).padStart(3, '0')}`),
+    }));
+  };
+
+  const summarize = (scenarios: Scenario[]) => {
+    const positive = scenarios.filter(s => s.testType.toLowerCase().includes('positive') || s.testType.toLowerCase().includes('happy')).length;
+    const negative = scenarios.filter(s => s.testType.toLowerCase().includes('negative') || s.testType.toLowerCase().includes('error')).length;
+    const edge = scenarios.length - positive - negative;
+    return { total: scenarios.length, positive, negative, edge };
+  };
+
+  // Step 1 — ask the LLM to enumerate modules in the document.
+  const handlePlan = async () => {
+    if (!fileContent && !manualReqs.trim()) {
+      setError('Please upload a document or enter requirements manually.');
+      return;
+    }
+    setError('');
+    setPlanning(true);
+    setPlanModules(null);
+    setResult(null);
+    setProgress(null);
+    try {
+      const res = await fetch('/api/scenario-gen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'plan',
+          document_content: fileContent,
+          document_name: fileName,
+          manual_requirements: manualReqs,
+          provider: provider || undefined,
+          model: model || undefined,
+        }),
+      });
+      const raw = await res.json();
+      if (!res.ok) throw new Error(raw.error || `API error: ${res.status}`);
+      const modules: PlanModule[] = Array.isArray(raw.modules) ? raw.modules : [];
+      if (modules.length === 0) {
+        throw new Error('No modules detected. Try a different document or generate without planning.');
+      }
+      setPlanModules(modules);
+      // Pre-select all modules by default
+      setSelectedModules(new Set(modules.map(m => m.name)));
+    } catch (err) {
+      setError(`Failed to plan modules: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setPlanning(false);
+    }
+  };
+
+  // Step 2 — generate scenarios for selected modules sequentially, accumulating results.
+  const handleGenerateSelected = async () => {
+    if (!planModules || selectedModules.size === 0) {
+      setError('Select at least one module to generate.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    setResult(null);
+
+    const toRun = planModules.filter(m => selectedModules.has(m.name));
+    setProgress({ done: 0, total: toRun.length });
+
+    const allScenarios: Scenario[] = [];
+    let lastMeta: GenerateResult['_meta'] | undefined;
+
+    for (let i = 0; i < toRun.length; i++) {
+      const mod = toRun[i];
+      setProgress({ done: i, total: toRun.length, current: mod.name });
+      try {
+        const res = await fetch('/api/scenario-gen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'generate-module',
+            module: mod,
+            document_content: fileContent,
+            document_name: fileName,
+            manual_requirements: manualReqs,
+            provider: provider || undefined,
+            model: model || undefined,
+          }),
+        });
+        const raw = await res.json();
+        if (!res.ok) {
+          console.warn(`Module "${mod.name}" failed:`, raw.error);
+          continue;
+        }
+        const scs = extractScenarios(raw);
+        allScenarios.push(...scs);
+        if (raw._meta) lastMeta = raw._meta;
+        // Show partial results as we go
+        const renumbered = allScenarios.map((s, idx) => ({ ...s, scenarioId: `TC-${String(idx + 1).padStart(3, '0')}` }));
+        setResult({ scenarios: renumbered, summary: summarize(renumbered), _meta: lastMeta });
+      } catch (err) {
+        console.warn(`Module "${mod.name}" error:`, err);
+      }
+    }
+
+    setProgress({ done: toRun.length, total: toRun.length });
+    setLoading(false);
+  };
+
+  // Single-shot generation (legacy / small docs / no planning needed)
   const handleGenerate = async () => {
     if (!fileContent && !manualReqs.trim()) {
       setError('Please upload a document or enter requirements manually.');
@@ -77,12 +220,13 @@ export default function ScenarioGeneratorPage() {
     setError('');
     setLoading(true);
     setResult(null);
-
+    setPlanModules(null);
     try {
       const res = await fetch('/api/scenario-gen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mode: 'single',
           document_content: fileContent,
           document_name: fileName,
           manual_requirements: manualReqs,
@@ -90,63 +234,37 @@ export default function ScenarioGeneratorPage() {
           model: model || undefined,
         }),
       });
-
       const raw = await res.json();
       if (!res.ok) throw new Error(raw.error || `API error: ${res.status}`);
-
-      // Normalize response - Ollama may return different shapes
-      let scenarios: Scenario[] = [];
-      if (Array.isArray(raw.scenarios)) {
-        scenarios = raw.scenarios;
-      } else if (Array.isArray(raw)) {
-        scenarios = raw;
-      } else if (raw.test_scenarios && Array.isArray(raw.test_scenarios)) {
-        scenarios = raw.test_scenarios;
-      } else if (raw.testScenarios && Array.isArray(raw.testScenarios)) {
-        scenarios = raw.testScenarios;
-      } else {
-        // Try to find any array in the response
-        for (const key of Object.keys(raw)) {
-          if (Array.isArray(raw[key]) && raw[key].length > 0 && typeof raw[key][0] === 'object') {
-            scenarios = raw[key];
-            break;
-          }
-        }
-      }
-
-      // Normalize field names (LLM might return snake_case or different names)
-      scenarios = (scenarios as unknown as Record<string, unknown>[]).map((s, i) => ({
-        scenarioId: String(s.scenarioId || s.scenario_id || s.id || `TC-${String(i + 1).padStart(3, '0')}`),
-        module: String(s.module || s.category || s.component || 'General'),
-        testType: String(s.testType || s.test_type || s.type || 'Positive') as Scenario['testType'],
-        priority: String(s.priority || s.severity || 'Medium'),
-        precondition: String(s.precondition || s.preconditions || s.prerequisites || ''),
-        steps: Array.isArray(s.steps) ? s.steps.map(String) : typeof s.steps === 'string' ? [s.steps] : ['Execute test'],
-        expectedResult: String(s.expectedResult || s.expected_result || s.expected || s.outcome || ''),
-        mappedRequirement: String(s.mappedRequirement || s.mapped_requirement || s.requirement || s.req_id || `REQ-${String(i + 1).padStart(3, '0')}`),
-        functionalRequirement: String(s.functionalRequirement || s.functional_requirement || s.fr || s.fr_id || s.frId || `FR-${String(i + 1).padStart(3, '0')}`),
-      }));
-
-      const positive = scenarios.filter(s => s.testType.toLowerCase().includes('positive') || s.testType.toLowerCase().includes('happy')).length;
-      const negative = scenarios.filter(s => s.testType.toLowerCase().includes('negative') || s.testType.toLowerCase().includes('error')).length;
-      const edge = scenarios.length - positive - negative;
-
-      const data: GenerateResult = {
-        scenarios,
-        summary: raw.summary ? {
-          total: raw.summary.total ?? scenarios.length,
-          positive: raw.summary.positive ?? positive,
-          negative: raw.summary.negative ?? negative,
-          edge: raw.summary.edge ?? raw.summary.edge_case ?? edge,
-        } : { total: scenarios.length, positive, negative, edge },
-        _meta: raw._meta,
-      };
-      setResult(data);
+      const scenarios = extractScenarios(raw);
+      const summary = raw.summary ? {
+        total: raw.summary.total ?? scenarios.length,
+        positive: raw.summary.positive ?? summarize(scenarios).positive,
+        negative: raw.summary.negative ?? summarize(scenarios).negative,
+        edge: raw.summary.edge ?? raw.summary.edge_case ?? summarize(scenarios).edge,
+      } : summarize(scenarios);
+      setResult({ scenarios, summary, _meta: raw._meta });
     } catch (err) {
       setError(`Failed to generate scenarios: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      void err;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleModule = (name: string) => {
+    setSelectedModules(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  };
+
+  const toggleAllModules = () => {
+    if (!planModules) return;
+    if (selectedModules.size === planModules.length) {
+      setSelectedModules(new Set());
+    } else {
+      setSelectedModules(new Set(planModules.map(m => m.name)));
     }
   };
 
@@ -305,24 +423,45 @@ export default function ScenarioGeneratorPage() {
           </div>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={handleGenerate}
-            disabled={loading}
+            onClick={handlePlan}
+            disabled={planning || loading}
             className="btn-primary flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Recommended for multi-domain FSDs — lists modules so you can pick which to generate"
           >
-            {loading ? (
+            {planning ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Generating Scenarios...
+                Identifying modules...
+              </>
+            ) : (
+              <>
+                <ListChecks size={16} />
+                Identify Modules
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleGenerate}
+            disabled={loading || planning}
+            className="btn-secondary flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Single-shot generation — best for small documents"
+          >
+            {loading && !planModules ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Generating...
               </>
             ) : (
               <>
                 <FlaskConical size={16} />
-                Generate Test Scenarios
+                Generate All At Once
               </>
             )}
           </button>
+
           {result && (
             <span className="flex items-center gap-1.5 text-xs text-[#198038]">
               <CheckCircle size={14} />
@@ -331,6 +470,85 @@ export default function ScenarioGeneratorPage() {
           )}
         </div>
       </div>
+
+      {/* Module Plan Panel — shown after Identify Modules */}
+      {planModules && planModules.length > 0 && (
+        <div className="bg-white border border-[#e0e0e0] p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-medium text-[#161616] flex items-center gap-2">
+                <Layers size={16} className="text-[#0f62fe]" />
+                Detected Modules ({planModules.length})
+              </h2>
+              <p className="text-xs text-[#525252] mt-1">
+                Select the modules you want to generate test scenarios for. Each runs as a separate, smaller LLM call.
+              </p>
+            </div>
+            <button
+              onClick={toggleAllModules}
+              className="text-xs text-[#0f62fe] hover:underline"
+            >
+              {selectedModules.size === planModules.length ? 'Deselect all' : 'Select all'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[360px] overflow-y-auto border border-[#e0e0e0] p-2">
+            {planModules.map((mod, i) => {
+              const checked = selectedModules.has(mod.name);
+              return (
+                <label
+                  key={`${mod.name}-${i}`}
+                  className={`flex items-start gap-2 p-3 border cursor-pointer transition-colors ${
+                    checked ? 'border-[#0f62fe] bg-[#edf5ff]' : 'border-[#e0e0e0] bg-white hover:border-[#c6c6c6]'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleModule(mod.name)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-[#161616] flex items-center gap-2 flex-wrap">
+                      <span>{mod.name}</span>
+                      {mod.chapter && <span className="ibm-tag ibm-tag-gray text-[10px]">Ch. {mod.chapter}</span>}
+                      <span className="ibm-tag ibm-tag-blue text-[10px]">~{mod.expectedScenarios || 10} TC</span>
+                    </div>
+                    {mod.summary && (
+                      <div className="text-[11px] text-[#525252] mt-1 leading-relaxed">{mod.summary}</div>
+                    )}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={handleGenerateSelected}
+              disabled={loading || selectedModules.size === 0}
+              className="btn-primary flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Generating ({progress?.done ?? 0}/{progress?.total ?? 0})…
+                </>
+              ) : (
+                <>
+                  <FlaskConical size={16} />
+                  Generate Selected ({selectedModules.size})
+                </>
+              )}
+            </button>
+            {progress && progress.current && (
+              <span className="text-xs text-[#525252]">
+                Currently: <strong>{progress.current}</strong>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Results */}
       {result && (
