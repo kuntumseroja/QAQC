@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { AVAILABLE_MODELS } from '@/lib/ai-engine';
-import { execSync } from 'child_process';
+
+// Mask any sk-... API key found in a string so it never leaks into UI errors
+function maskKeys(text: string): string {
+  return text.replace(/sk-[A-Za-z0-9_-]{8,}/g, (m) => `${m.slice(0, 7)}…${m.slice(-4)}`);
+}
 
 export async function GET() {
   const provider = process.env.LLM_PROVIDER || 'mock';
@@ -37,67 +41,79 @@ export async function POST(request: Request) {
           size: m.size,
         })) || [];
         return NextResponse.json({ success: true, models, message: `Connected! ${models.length} models available.` });
-      } catch (err) {
+      } catch {
         return NextResponse.json({ success: false, models: [], message: `Cannot connect to Ollama at ${body.baseUrl || 'http://localhost:11434'}. Ensure Ollama is running.` });
       }
     }
 
     // Test Anthropic connection
     if (body.action === 'test-anthropic') {
-      if (!body.apiKey && !process.env.ANTHROPIC_API_KEY) {
+      const apiKey = body.apiKey || process.env.ANTHROPIC_API_KEY || '';
+      if (!apiKey) {
         return NextResponse.json({ success: false, message: 'API key is required' });
       }
       try {
-        const apiKey = body.apiKey || process.env.ANTHROPIC_API_KEY || '';
         if (!apiKey.startsWith('sk-ant-')) {
           throw new Error('Invalid API key format — must start with sk-ant-');
         }
-        // Use curl to verify key (avoids Next.js Turbopack fetch issues)
-        const result = execSync(
-          `curl -s --max-time 10 -X POST https://api.anthropic.com/v1/messages ` +
-          `-H 'Content-Type: application/json' ` +
-          `-H 'x-api-key: ${apiKey}' ` +
-          `-H 'anthropic-version: 2023-06-01' ` +
-          `-d '{"model":"claude-sonnet-4-20250514","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}'`,
-          { encoding: 'utf-8', timeout: 15000 }
-        );
-        const parsed = JSON.parse(result);
-        if (parsed.type === 'error' && parsed.error?.type === 'authentication_error') {
-          throw new Error(parsed.error.message || 'Invalid API key');
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1,
+            messages: [{ role: 'user', content: 'hi' }],
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (res.status === 401 || res.status === 403) {
+          const data = await res.json().catch(() => ({})) as { error?: { message?: string } };
+          throw new Error(data?.error?.message || `Invalid API key (HTTP ${res.status})`);
         }
+        // Any non-auth response (200, 400, 429, etc.) means the key was accepted
         return NextResponse.json({ success: true, message: 'Anthropic API key is valid!' });
       } catch (err) {
-        return NextResponse.json({ success: false, message: `Anthropic API error: ${err instanceof Error ? err.message : 'Unknown error'}` });
+        const raw = err instanceof Error ? err.message : 'Unknown error';
+        return NextResponse.json({ success: false, message: `Anthropic API error: ${maskKeys(raw)}` });
       }
     }
 
     // Test DeepSeek connection
     if (body.action === 'test-deepseek') {
-      if (!body.apiKey && !process.env.DEEPSEEK_API_KEY) {
+      const apiKey = body.apiKey || process.env.DEEPSEEK_API_KEY || '';
+      if (!apiKey) {
         return NextResponse.json({ success: false, message: 'API key is required' });
       }
       try {
-        const apiKey = body.apiKey || process.env.DEEPSEEK_API_KEY || '';
-        // DeepSeek keys typically start with 'sk-' (OpenAI-style)
         if (!apiKey.startsWith('sk-')) {
           throw new Error('Invalid API key format — must start with sk-');
         }
         const baseUrl = body.baseUrl || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
-        // Use curl to verify key (avoids Next.js Turbopack fetch issues)
-        const result = execSync(
-          `curl -s --max-time 10 -X POST ${baseUrl}/v1/chat/completions ` +
-          `-H 'Content-Type: application/json' ` +
-          `-H 'Authorization: Bearer ${apiKey}' ` +
-          `-d '{"model":"deepseek-chat","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}'`,
-          { encoding: 'utf-8', timeout: 15000 }
-        );
-        const parsed = JSON.parse(result);
-        if (parsed.error) {
-          throw new Error(parsed.error.message || parsed.error.code || 'Invalid API key');
+        const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            max_tokens: 1,
+            messages: [{ role: 'user', content: 'hi' }],
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (res.status === 401 || res.status === 403) {
+          const data = await res.json().catch(() => ({})) as { error?: { message?: string } };
+          throw new Error(data?.error?.message || `Invalid API key (HTTP ${res.status})`);
         }
         return NextResponse.json({ success: true, message: 'DeepSeek API key is valid!' });
       } catch (err) {
-        return NextResponse.json({ success: false, message: `DeepSeek API error: ${err instanceof Error ? err.message : 'Unknown error'}` });
+        const raw = err instanceof Error ? err.message : 'Unknown error';
+        return NextResponse.json({ success: false, message: `DeepSeek API error: ${maskKeys(raw)}` });
       }
     }
 
