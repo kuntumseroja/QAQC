@@ -1,6 +1,8 @@
 // AI Engine - Multi-provider LLM integration layer
 // Supports: Ollama (local), Anthropic Claude Sonnet, DeepSeek, and built-in mock
 
+import { SCENARIO_GEN_SYSTEM_PROMPT } from './prompts/scenario-gen-prompt';
+
 export type LLMProvider = 'ollama' | 'anthropic' | 'deepseek' | 'mock';
 
 export interface LLMConfig {
@@ -202,42 +204,7 @@ async function callDeepSeek(config: LLMConfig, systemPrompt: string, userMessage
 
 // System prompts per service (from PRD templates)
 const SERVICE_PROMPTS: Record<string, string> = {
-  'scenario-gen': `You are an expert QA Engineer specialized in payment system testing for Bank Indonesia. You follow ISTQB CTFL methodology and ISO 25010 SQuaRE standards.
-
-Your task: Analyze the provided FSD/BRD/SRS document THOROUGHLY. Extract EVERY functional requirement, then generate SPECIFIC test scenarios derived from the ACTUAL content — not generic placeholders.
-
-For each requirement found, generate positive, negative, and edge case scenarios.
-
-You MUST respond with a single JSON object (no markdown, no explanation) in this exact structure:
-{
-  "scenarios": [
-    {
-      "scenarioId": "TC-001",
-      "module": "actual module name from the document",
-      "functionalRequirement": "FR-001: short description of the functional requirement being tested",
-      "testType": "Positive" | "Negative" | "Edge Case",
-      "priority": "Critical" | "High" | "Medium" | "Low",
-      "precondition": "specific precondition based on the requirement",
-      "steps": ["step 1 specific to this requirement", "step 2", "step 3"],
-      "expectedResult": "specific expected outcome based on the document",
-      "mappedRequirement": "REQ-001 or the actual requirement ID from the document"
-    }
-  ],
-  "summary": { "total": 0, "positive": 0, "negative": 0, "edge": 0 }
-}
-
-CRITICAL RULES:
-- Every scenario MUST reference actual content from the uploaded document
-- Steps must be SPECIFIC to the requirement, not generic like "execute test"
-- Expected results must describe the concrete outcome described in the document
-- Map scenarios to real requirement IDs found in the document (or generate sequential IDs)
-- For each scenario, derive a Functional Requirement (FR) ID and short description (e.g., "FR-001: User Authentication via OTP")
-- Multiple test cases can share the same FR if they test different aspects of the same function
-- Generate 3 scenarios per requirement (positive, negative, edge case)
-- Keep each step description concise (under 100 characters)
-- Keep expectedResult concise (under 150 characters)
-- Limit to the top 15 most important requirements if the document contains many
-- ALWAYS close the JSON properly with the summary object and closing brace`,
+  'scenario-gen': SCENARIO_GEN_SYSTEM_PROMPT,
   'traceability': 'You are a Requirements Traceability expert. Map each requirement to corresponding test cases, identify coverage gaps. Output as JSON with fields: matrix[] (requirementId, description, testCaseIds[], coverageStatus, gapNotes), coverage (total, covered, gaps, percentage).',
   'perf-scripts': `You are a Performance Engineer generating JMeter and Gatling test scripts for Bank Indonesia payment APIs.
 
