@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { processAI } from '@/lib/ai-engine';
+import { processAI, buildConfigForProvider, type LLMProvider } from '@/lib/ai-engine';
 import { eventBus, TOPICS } from '@/lib/event-bus';
 
 export async function POST(request: Request) {
@@ -11,6 +11,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No input content provided' }, { status: 400 });
     }
 
+    const llmConfig = body.provider
+      ? buildConfigForProvider(body.provider as LLMProvider, body.model)
+      : undefined;
+
     const response = await processAI({
       service: 'scenario-gen',
       prompt: `Generate comprehensive test scenarios from the provided FSD/BRD/SRS document.
@@ -20,6 +24,7 @@ Content length: ${inputContent.length} characters
 Analyze the ACTUAL content below and generate test scenarios that are SPECIFIC to the requirements described. Do NOT generate generic placeholder scenarios.`,
       input: inputContent,
       options: body.options,
+      llmConfig,
     });
 
     eventBus.publish(TOPICS.TEST_SCENARIO_CREATED, {

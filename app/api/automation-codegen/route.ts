@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { processAI } from '@/lib/ai-engine';
+import { processAI, buildConfigForProvider, type LLMProvider } from '@/lib/ai-engine';
 
 export async function POST(request: Request) {
   try {
@@ -11,12 +11,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No test steps provided' }, { status: 400 });
     }
 
+    const llmConfig = body.provider
+      ? buildConfigForProvider(body.provider as LLMProvider, body.model)
+      : undefined;
+
     const response = await processAI({
       service: 'automation-codegen',
       prompt: `Generate ${framework} automation test code using Page Object Model pattern from the provided manual test steps.
 Framework: ${framework}`,
       input: inputContent,
       options: { framework, ...body.options },
+      llmConfig,
     });
 
     const result = response.result as Record<string, unknown>;

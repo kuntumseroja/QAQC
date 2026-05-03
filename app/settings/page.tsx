@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Server, Cloud, Cpu, CheckCircle, XCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Settings, Server, Cloud, Cpu, CheckCircle, XCircle, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import StatusBadge from '@/components/status-badge';
 
 interface ModelInfo {
@@ -15,10 +15,13 @@ interface SettingsData {
   currentProvider: string;
   currentModel: string;
   ollamaBaseUrl: string;
+  deepseekBaseUrl?: string;
   hasAnthropicKey: boolean;
+  hasDeepseekKey?: boolean;
   availableModels: {
     ollama: ModelInfo[];
     anthropic: ModelInfo[];
+    deepseek?: ModelInfo[];
     mock: ModelInfo[];
   };
 }
@@ -31,6 +34,7 @@ export default function SettingsPage() {
   const [anthropicKey, setAnthropicKey] = useState('');
   const [ollamaStatus, setOllamaStatus] = useState<{ success: boolean; message: string; models: ModelInfo[] } | null>(null);
   const [anthropicStatus, setAnthropicStatus] = useState<{ success: boolean; message: string } | null>(null);
+  const [deepseekStatus, setDeepseekStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [ollamaModels, setOllamaModels] = useState<ModelInfo[]>([]);
 
@@ -59,6 +63,10 @@ export default function SettingsPage() {
               { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', description: 'Latest Sonnet - fast & capable' },
               { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', description: 'Most capable model' },
               { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', description: 'Fastest, cost-efficient' },
+            ],
+            deepseek: [
+              { id: 'deepseek-chat', name: 'DeepSeek-V3 (Chat)', description: 'General-purpose, cost-efficient' },
+              { id: 'deepseek-reasoner', name: 'DeepSeek-R1 (Reasoner)', description: 'Advanced reasoning model' },
             ],
             mock: [{ id: 'mock-engine', name: 'Built-in Mock Engine', description: 'Simulated responses' }],
           },
@@ -103,6 +111,23 @@ export default function SettingsPage() {
     setTesting(null);
   };
 
+  const testDeepseek = async () => {
+    setTesting('deepseek');
+    setDeepseekStatus(null);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test-deepseek' }),
+      });
+      const data = await res.json();
+      setDeepseekStatus(data);
+    } catch {
+      setDeepseekStatus({ success: false, message: 'Failed to test connection' });
+    }
+    setTesting(null);
+  };
+
   const providers = [
     {
       id: 'mock',
@@ -128,13 +153,22 @@ export default function SettingsPage() {
       color: '#8a3ffc',
       badge: 'Cloud',
     },
+    {
+      id: 'deepseek',
+      name: 'DeepSeek',
+      description: 'Cost-efficient frontier models — DeepSeek-V3 (Chat) and DeepSeek-R1 (Reasoner). Requires API key.',
+      icon: Sparkles,
+      color: '#0f62fe',
+      badge: 'Cloud',
+    },
   ];
 
   const getModelsForProvider = (provider: string): ModelInfo[] => {
     if (provider === 'ollama' && ollamaModels.length > 0) {
       return ollamaModels;
     }
-    return settings?.availableModels[provider as keyof typeof settings.availableModels] || [];
+    const list = settings?.availableModels[provider as keyof typeof settings.availableModels];
+    return Array.isArray(list) ? list : [];
   };
 
   if (!settings) {
@@ -181,7 +215,7 @@ export default function SettingsPage() {
       {/* Provider Selection */}
       <div>
         <h2 className="text-sm font-medium text-[#161616] mb-3">Select LLM Provider</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {providers.map((p) => (
             <button
               key={p.id}
@@ -320,6 +354,60 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* DeepSeek Configuration */}
+      {selectedProvider === 'deepseek' && (
+        <div className="bg-white border border-[#e0e0e0] p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} className="text-[#0f62fe]" />
+            <h2 className="text-sm font-medium text-[#161616]">DeepSeek Configuration</h2>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#525252] mb-1">API Key Status</label>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 ibm-input flex items-center text-[#6f6f6f] bg-[#f4f4f4]" style={{ cursor: 'default' }}>
+                {settings.hasDeepseekKey
+                  ? '••••••••••••••••••••••••••••••• (configured in .env.local)'
+                  : 'Not configured — set DEEPSEEK_API_KEY in .env.local'}
+              </div>
+              <button onClick={testDeepseek} disabled={testing === 'deepseek' || !settings.hasDeepseekKey} className="btn-primary !px-4 !min-h-[40px] flex items-center gap-2 disabled:opacity-50">
+                {testing === 'deepseek' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                Verify Key
+              </button>
+            </div>
+            {!settings.hasDeepseekKey && (
+              <p className="text-xs text-[#da1e28] mt-1">API key not found. Add it to .env.local and restart the server.</p>
+            )}
+          </div>
+
+          {deepseekStatus && (
+            <div className={`ibm-notification ${deepseekStatus.success ? 'ibm-notification-success' : 'ibm-notification-error'}`}>
+              {deepseekStatus.success ? <CheckCircle size={16} className="text-[#198038] flex-shrink-0" /> : <XCircle size={16} className="text-[#da1e28] flex-shrink-0" />}
+              <span>{deepseekStatus.message}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-[#525252] mb-1">Select Model</label>
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="ibm-select"
+            >
+              {(settings.availableModels.deepseek || []).map(m => (
+                <option key={m.id} value={m.id}>{m.name} - {m.description}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="ibm-notification ibm-notification-warning">
+            <span className="text-xs">
+              Get your API key at <strong>platform.deepseek.com</strong>. Set <code className="bg-[#e0e0e0] px-1 py-0.5 rounded text-[11px]">DEEPSEEK_API_KEY=sk-...</code> in <code className="bg-[#e0e0e0] px-1 py-0.5 rounded text-[11px]">.env.local</code> and restart the dev server.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Mock Configuration */}
       {selectedProvider === 'mock' && (
         <div className="bg-white border border-[#e0e0e0] p-4">
@@ -347,7 +435,7 @@ export default function SettingsPage() {
         <pre className="bg-[#161616] text-[#f4f4f4] p-4 text-xs leading-relaxed overflow-x-auto">
 {`# .env.local
 LLM_PROVIDER=${selectedProvider}
-${selectedProvider === 'ollama' ? `OLLAMA_BASE_URL=${ollamaUrl}\nOLLAMA_MODEL=${selectedModel}` : ''}${selectedProvider === 'anthropic' ? `ANTHROPIC_API_KEY=sk-ant-****** # set your key here, never expose in browser\nANTHROPIC_MODEL=${selectedModel}` : ''}${selectedProvider === 'mock' ? '# No additional config needed for mock engine' : ''}`}
+${selectedProvider === 'ollama' ? `OLLAMA_BASE_URL=${ollamaUrl}\nOLLAMA_MODEL=${selectedModel}` : ''}${selectedProvider === 'anthropic' ? `ANTHROPIC_API_KEY=sk-ant-****** # set your key here, never expose in browser\nANTHROPIC_MODEL=${selectedModel}` : ''}${selectedProvider === 'deepseek' ? `DEEPSEEK_API_KEY=sk-****** # get from platform.deepseek.com\nDEEPSEEK_MODEL=${selectedModel}` : ''}${selectedProvider === 'mock' ? '# No additional config needed for mock engine' : ''}`}
         </pre>
         <p className="text-xs text-[#6f6f6f] mt-3">
           After updating <code className="bg-[#e0e0e0] px-1 py-0.5 rounded text-[11px]">.env.local</code>, restart the dev server for changes to take effect.

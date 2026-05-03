@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FlaskConical, ArrowLeft, Loader2, CheckCircle, AlertCircle, Layers } from 'lucide-react';
 import Link from 'next/link';
 import FileUpload from '@/components/file-upload';
@@ -49,6 +49,25 @@ export default function ScenarioGeneratorPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateResult | null>(null);
   const [error, setError] = useState('');
+  const [provider, setProvider] = useState<string>('');
+  const [model, setModel] = useState<string>('');
+  const [availableModels, setAvailableModels] = useState<Record<string, { id: string; name: string }[]>>({});
+
+  useEffect(() => {
+    fetch('/api/settings').then(r => r.json()).then(data => {
+      setProvider(data.currentProvider || 'mock');
+      setModel(data.currentModel || '');
+      setAvailableModels(data.availableModels || {});
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // When provider changes, reset model to first available
+    const list = availableModels[provider];
+    if (list && list.length > 0 && !list.find(m => m.id === model)) {
+      setModel(list[0].id);
+    }
+  }, [provider, availableModels]);
 
   const handleGenerate = async () => {
     if (!fileContent && !manualReqs.trim()) {
@@ -67,6 +86,8 @@ export default function ScenarioGeneratorPage() {
           document_content: fileContent,
           document_name: fileName,
           manual_requirements: manualReqs,
+          provider: provider || undefined,
+          model: model || undefined,
         }),
       });
 
@@ -209,6 +230,29 @@ export default function ScenarioGeneratorPage() {
       {/* Input Panel */}
       <div className="bg-white border border-[#e0e0e0] p-5 space-y-4">
         <h2 className="text-sm font-medium text-[#161616]">Input Requirements</h2>
+
+        {/* Provider / Model Override */}
+        <div className="flex flex-wrap items-end gap-3 p-3 bg-[#f4f4f4] border border-[#e0e0e0]">
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-xs font-medium text-[#525252] mb-1">LLM Provider</label>
+            <select className="ibm-select" value={provider} onChange={e => setProvider(e.target.value)}>
+              {Object.keys(availableModels).map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-[260px]">
+            <label className="block text-xs font-medium text-[#525252] mb-1">Model</label>
+            <select className="ibm-select" value={model} onChange={e => setModel(e.target.value)}>
+              {(availableModels[provider] || []).map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="text-xs text-[#6f6f6f] pb-2">
+            Per-request override — overrides default in <code className="bg-white px-1">.env.local</code>
+          </div>
+        </div>
 
         <FileUpload
           label="Upload BRD/SRS Document"

@@ -1,13 +1,13 @@
 // AI Engine - Multi-provider LLM integration layer
-// Supports: Ollama (local), Anthropic Claude Sonnet, and built-in mock
+// Supports: Ollama (local), Anthropic Claude Sonnet, DeepSeek, and built-in mock
 
-export type LLMProvider = 'ollama' | 'anthropic' | 'mock';
+export type LLMProvider = 'ollama' | 'anthropic' | 'deepseek' | 'mock';
 
 export interface LLMConfig {
   provider: LLMProvider;
   model: string;
-  baseUrl?: string;       // Ollama: http://localhost:11434, Anthropic: https://api.anthropic.com
-  apiKey?: string;         // Required for Anthropic
+  baseUrl?: string;       // Ollama: http://localhost:11434, Anthropic: https://api.anthropic.com, DeepSeek: https://api.deepseek.com
+  apiKey?: string;         // Required for Anthropic and DeepSeek
   temperature?: number;
   maxTokens?: number;
 }
@@ -32,20 +32,46 @@ export interface AIResponse {
 // Default LLM config - reads from env or falls back to mock
 function getDefaultConfig(): LLMConfig {
   const provider = (process.env.LLM_PROVIDER as LLMProvider) || 'mock';
+  const baseUrl =
+    provider === 'ollama' ? (process.env.OLLAMA_BASE_URL || 'http://localhost:11434') :
+    provider === 'deepseek' ? (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com') :
+    'https://api.anthropic.com';
+  const model =
+    provider === 'anthropic' ? (process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514') :
+    provider === 'deepseek' ? (process.env.DEEPSEEK_MODEL || 'deepseek-chat') :
+    provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'llama3.1') :
+    'mock-engine';
+  const apiKey =
+    provider === 'deepseek' ? (process.env.DEEPSEEK_API_KEY || '') :
+    (process.env.ANTHROPIC_API_KEY || '');
   return {
     provider,
-    model: provider === 'anthropic'
-      ? (process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514')
-      : provider === 'ollama'
-      ? (process.env.OLLAMA_MODEL || 'llama3.1')
-      : 'mock-engine',
-    baseUrl: provider === 'ollama'
-      ? (process.env.OLLAMA_BASE_URL || 'http://localhost:11434')
-      : 'https://api.anthropic.com',
-    apiKey: process.env.ANTHROPIC_API_KEY || '',
+    model,
+    baseUrl,
+    apiKey,
     temperature: 0.3,
     maxTokens: 4096,
   };
+}
+
+// Build an LLMConfig for a specific provider, pulling the right env keys.
+// Used when the UI overrides the default provider on a per-request basis.
+export function buildConfigForProvider(provider: LLMProvider, model?: string): LLMConfig {
+  const baseUrl =
+    provider === 'ollama' ? (process.env.OLLAMA_BASE_URL || 'http://localhost:11434') :
+    provider === 'deepseek' ? (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com') :
+    'https://api.anthropic.com';
+  const resolvedModel = model || (
+    provider === 'anthropic' ? (process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514') :
+    provider === 'deepseek' ? (process.env.DEEPSEEK_MODEL || 'deepseek-chat') :
+    provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'llama3.1') :
+    'mock-engine'
+  );
+  const apiKey =
+    provider === 'deepseek' ? (process.env.DEEPSEEK_API_KEY || '') :
+    provider === 'anthropic' ? (process.env.ANTHROPIC_API_KEY || '') :
+    '';
+  return { provider, model: resolvedModel, baseUrl, apiKey, temperature: 0.3, maxTokens: 4096 };
 }
 
 // Available models for UI selection
@@ -63,6 +89,10 @@ export const AVAILABLE_MODELS = {
     { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', description: 'Latest Sonnet - fast & capable' },
     { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', description: 'Most capable model' },
     { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', description: 'Fastest, cost-efficient' },
+  ],
+  deepseek: [
+    { id: 'deepseek-chat', name: 'DeepSeek-V3 (Chat)', description: 'General-purpose, cost-efficient' },
+    { id: 'deepseek-reasoner', name: 'DeepSeek-R1 (Reasoner)', description: 'Advanced reasoning model' },
   ],
   mock: [
     { id: 'mock-engine', name: 'Built-in Mock Engine', description: 'Simulated AI responses (no LLM required)' },
@@ -134,6 +164,39 @@ async function callAnthropic(config: LLMConfig, systemPrompt: string, userMessag
     console.warn(`[ai-engine] Anthropic response truncated (hit max_tokens). Length: ${text.length}`);
   }
 
+  return text;
+}
+
+// Call DeepSeek API (OpenAI-compatible)
+async function callDeepSeek(config: LLMConfig, systemPrompt: string, userMessage: string): Promise<string> {
+  if (!config.apiKey) throw new Error('DeepSeek API key is required. Set DEEPSEEK_API_KEY environment variable.');
+  const baseUrl = config.baseUrl || 'https://api.deepseek.com';
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      max_tokens: config.maxTokens ?? 8192,
+      temperature: config.temperature ?? 0.3,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`DeepSeek API error: ${response.status} - ${err}`);
+  }
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content || '';
+  if (data.choices?.[0]?.finish_reason === 'length') {
+    console.warn(`[ai-engine] DeepSeek response truncated (hit max_tokens). Length: ${text.length}`);
+  }
   return text;
 }
 
@@ -524,6 +587,8 @@ export async function processAI(request: AIRequest): Promise<AIResponse> {
       let llmResponse: string;
       if (provider === 'ollama') {
         llmResponse = await callOllama(config, systemPrompt, userMessage);
+      } else if (provider === 'deepseek') {
+        llmResponse = await callDeepSeek(config, systemPrompt, userMessage);
       } else {
         llmResponse = await callAnthropic(config, systemPrompt, userMessage);
       }

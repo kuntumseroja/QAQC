@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { processAI } from '@/lib/ai-engine';
+import { processAI, buildConfigForProvider, type LLMProvider } from '@/lib/ai-engine';
 
 export async function POST(request: Request) {
   try {
@@ -11,6 +11,10 @@ export async function POST(request: Request) {
     if (!inputContent.trim()) {
       return NextResponse.json({ error: 'No specification content provided' }, { status: 400 });
     }
+
+    const llmConfig = body.provider
+      ? buildConfigForProvider(body.provider as LLMProvider, body.model)
+      : undefined;
 
     const response = await processAI({
       service: 'perf-scripts',
@@ -24,6 +28,7 @@ Spec name: ${body.spec_name || 'Unknown'}`,
         testType,
         ...body.options,
       },
+      llmConfig,
     });
 
     // Include provider metadata
