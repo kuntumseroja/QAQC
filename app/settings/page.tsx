@@ -313,8 +313,8 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <div className="flex-1 ibm-input flex items-center text-[#6f6f6f] bg-[#f4f4f4]" style={{ cursor: 'default' }}>
                 {settings.hasAnthropicKey
-                  ? '••••••••••••••••••••••••••••••• (configured in .env.local)'
-                  : 'Not configured — set ANTHROPIC_API_KEY in .env.local'}
+                  ? '••••••••••••••••••••••••••••••• (configured via environment variable)'
+                  : 'Not configured — set ANTHROPIC_API_KEY env var (.env.local locally / Variables on Railway)'}
               </div>
               <button onClick={testAnthropic} disabled={testing === 'anthropic' || !settings.hasAnthropicKey} className="btn-primary !px-4 !min-h-[40px] flex items-center gap-2 disabled:opacity-50">
                 {testing === 'anthropic' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -367,8 +367,8 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <div className="flex-1 ibm-input flex items-center text-[#6f6f6f] bg-[#f4f4f4]" style={{ cursor: 'default' }}>
                 {settings.hasDeepseekKey
-                  ? '••••••••••••••••••••••••••••••• (configured in .env.local)'
-                  : 'Not configured — set DEEPSEEK_API_KEY in .env.local'}
+                  ? '••••••••••••••••••••••••••••••• (configured via environment variable)'
+                  : 'Not configured — set DEEPSEEK_API_KEY env var (.env.local locally / Variables on Railway)'}
               </div>
               <button onClick={testDeepseek} disabled={testing === 'deepseek' || !settings.hasDeepseekKey} className="btn-primary !px-4 !min-h-[40px] flex items-center gap-2 disabled:opacity-50">
                 {testing === 'deepseek' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
