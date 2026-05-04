@@ -146,13 +146,13 @@ export default function ScenarioGeneratorPage() {
       if (!res.ok) throw new Error(raw.error || `API error: ${res.status}`);
       const modules: PlanModule[] = Array.isArray(raw.modules) ? raw.modules : [];
       if (modules.length === 0) {
-        throw new Error('No modules detected. Try a different document or generate without planning.');
+        throw new Error('No user stories detected. Try a different document or generate without planning.');
       }
       setPlanModules(modules);
       // Pre-select all modules by default
       setSelectedModules(new Set(modules.map(m => m.name)));
     } catch (err) {
-      setError(`Failed to plan modules: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(`Failed to identify user stories: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setPlanning(false);
     }
@@ -161,7 +161,7 @@ export default function ScenarioGeneratorPage() {
   // Step 2 — generate scenarios for selected modules sequentially, accumulating results.
   const handleGenerateSelected = async () => {
     if (!planModules || selectedModules.size === 0) {
-      setError('Select at least one module to generate.');
+      setError('Select at least one user story to generate.');
       return;
     }
     setError('');
@@ -281,7 +281,7 @@ export default function ScenarioGeneratorPage() {
 
   const columns = [
     { key: 'scenarioId', label: 'Scenario ID', sortable: true, width: '90px' },
-    { key: 'module', label: 'Module', sortable: true, width: '140px' },
+    { key: 'module', label: 'User Story', sortable: true, width: '160px' },
     { key: 'functionalRequirement', label: 'FR', sortable: true, width: '100px',
       render: (value: unknown) => (
         <span className="ibm-tag ibm-tag-teal">{String(value)}</span>
@@ -428,17 +428,17 @@ export default function ScenarioGeneratorPage() {
             onClick={handlePlan}
             disabled={planning || loading}
             className="btn-primary flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-            title="Recommended for multi-domain FSDs — lists modules so you can pick which to generate"
+            title="Recommended for multi-domain FSDs — lists user stories so you can pick which to generate"
           >
             {planning ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Identifying modules...
+                Identifying user stories...
               </>
             ) : (
               <>
                 <ListChecks size={16} />
-                Identify Modules
+                Identify User Stories
               </>
             )}
           </button>
@@ -471,17 +471,17 @@ export default function ScenarioGeneratorPage() {
         </div>
       </div>
 
-      {/* Module Plan Panel — shown after Identify Modules */}
+      {/* User Story Plan Panel — shown after Identify User Stories */}
       {planModules && planModules.length > 0 && (
         <div className="bg-white border border-[#e0e0e0] p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-sm font-medium text-[#161616] flex items-center gap-2">
                 <Layers size={16} className="text-[#0f62fe]" />
-                Detected Modules ({planModules.length})
+                Detected User Stories ({planModules.length})
               </h2>
               <p className="text-xs text-[#525252] mt-1">
-                Select the modules you want to generate test scenarios for. Each runs as a separate, smaller LLM call.
+                Select the user stories you want to generate test scenarios for. Each runs as a separate, smaller LLM call.
               </p>
             </div>
             <button

@@ -73,13 +73,13 @@ export default function Sidebar() {
   return (
     <aside className="w-[256px] min-h-screen bg-[#161616] text-[#f4f4f4] flex flex-col flex-shrink-0">
       {/* Logo */}
-      <div className="h-12 flex items-center px-4 border-b border-[#393939]">
+      <div className="h-14 flex items-center px-4 border-b border-[#393939]">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#0f62fe] rounded flex items-center justify-center">
+          <div className="w-8 h-8 bg-[#0f62fe] rounded flex items-center justify-center flex-shrink-0">
             <span className="text-white font-semibold text-sm">QA</span>
           </div>
-          <div>
-            <div className="text-sm font-semibold leading-none">QAQC4BI</div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold leading-tight">HCD-ID Quality Consulting Services</div>
             <div className="text-[10px] text-[#a8a8a8] leading-none mt-0.5">IBM Consulting</div>
           </div>
         </div>
