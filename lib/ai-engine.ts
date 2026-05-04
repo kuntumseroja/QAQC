@@ -116,9 +116,12 @@ export const AVAILABLE_MODELS = {
 async function callOllama(config: LLMConfig, systemPrompt: string, userMessage: string): Promise<string> {
   const baseUrl = config.baseUrl || 'http://localhost:11434';
   const controller = new AbortController();
-  // Local 8B models on a laptop can take 2-4 min for large FSDs (prompt
-  // processing + decode). 60s was too aggressive.
-  const timeout = setTimeout(() => controller.abort(), 240000); // 4 min
+  // Local inference on Mac/laptop:
+  //   8B  models: ~30-90s for plan pass on a few-page FSD
+  //   13B-16B   : 2-6 min, prompt-processing-bound
+  //   70B       : 8 min+, often impractical
+  // The 240s ceiling was killing deepseek-coder-v2:16b mid-decode.
+  const timeout = setTimeout(() => controller.abort(), 600000); // 10 min
   try {
     const response = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',

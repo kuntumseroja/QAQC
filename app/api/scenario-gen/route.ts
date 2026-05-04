@@ -3,7 +3,9 @@ import { processAI, buildConfigForProvider, type LLMProvider } from '@/lib/ai-en
 import { eventBus, TOPICS } from '@/lib/event-bus';
 
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+// Generous limit so local Ollama 13B-16B models can finish the planning pass
+// without Next.js cutting them off. Cloud providers always finish well under this.
+export const maxDuration = 700;
 
 interface Scenario {
   scenarioId?: string;
