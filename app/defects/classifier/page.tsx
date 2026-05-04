@@ -122,7 +122,23 @@ export default function DefectClassifierPage() {
 
       {/* Input Panel */}
       <div className="bg-white border border-[#e0e0e0] p-5 space-y-4">
-        <h2 className="text-sm font-medium text-[#161616]">Defect Information</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-sm font-medium text-[#161616]">Defect Information</h2>
+          <button
+            type="button"
+            onClick={() => {
+              setDescription(`ICPR (Indonesia Credit Penjaminan Repository) Sertifikat Penjaminan upload to api.icpr.ojk.go.id is timing out (HTTP 504) for 6 of 22 sertifikat in the sprint 24 batch. Sertifikat status remains 'PENDING_ICPR' indefinitely. Affected CIFs include 1 Korporat Rp 2 B (CIF-2026-00011) and 1 Rp 1.2 B (CIF-2026-00024). Total exposure of dropped certs ≈ Rp 6.95 B (~26% of sprint plafon). Pattern is recurring — 4× across sprints 22-24, escalating 1 → 1 → 2 → 6 certs. OJK 7-day reporting SLA at risk.`);
+              setLogs(`[2026-04-13 02:00:30] INFO  stage=06_icpr_upload_sertifikat rows_in=22 expected=22 attempted=22 endpoint=api.icpr.ojk.go.id
+[2026-04-13 02:01:00] WARN  stage=06_icpr_upload_sertifikat response_time=29800ms threshold=15000ms
+[2026-04-13 02:01:30] WARN  stage=06_icpr_upload_sertifikat response_time=30000ms timeout reached for 6 of 22 cert uploads
+[2026-04-13 02:01:30] ERROR stage=06_icpr_upload_sertifikat rows_returned=16 expected=22 missing=6 reason="upstream timeout (HTTP 504 from api.icpr.ojk.go.id)"
+[2026-04-13 02:01:30] ERROR stage=06_icpr_upload_sertifikat missing_cif_ids=[CIF-2026-00006,CIF-2026-00010,CIF-2026-00011,CIF-2026-00014,CIF-2026-00020,CIF-2026-00024]`);
+            }}
+            className="text-[11px] text-[#0f62fe] hover:underline"
+          >
+            Use Jamkrindo sample (ICPR upload failure)
+          </button>
+        </div>
 
         <div>
           <label className="block text-xs font-medium text-[#525252] mb-1">
@@ -131,7 +147,7 @@ export default function DefectClassifierPage() {
           <textarea
             className="ibm-textarea"
             rows={4}
-            placeholder="Describe the defect in detail — what was expected, what actually happened, steps to reproduce..."
+            placeholder="e.g. ICPR Sertifikat Penjaminan upload timeout — 6 of 22 sertifikat dropped from the sprint 24 batch (HTTP 504 from api.icpr.ojk.go.id). OJK 7-day SLA at risk. Affected CIFs include 1 Korporat Rp 2 B."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -144,7 +160,7 @@ export default function DefectClassifierPage() {
           <textarea
             className="ibm-textarea font-mono text-xs"
             rows={5}
-            placeholder="Paste stack trace, error logs, or relevant console output here..."
+            placeholder="e.g. JaGuarS pipeline log — paste the stage 06_icpr_upload_sertifikat ERROR lines, or any stack trace from the failing JaGuarS / Oracle GL job."
             value={logs}
             onChange={(e) => setLogs(e.target.value)}
           />

@@ -8,10 +8,9 @@ interface DefectRow {
   module?: string;
   severity?: string;
   status?: string;
-  reported_date?: string;
-  recurring_tag?: string;
   root_cause?: string;
-  resolved_date?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface HeatmapRow {
@@ -52,7 +51,6 @@ function buildHeatmap(defects: DefectRow[]): HeatmapRow[] {
     const row = byModule.get(mod)!;
     row[severityBucket(d.severity)] += 1;
   }
-  // Risk score: critical*30 + major*15 + minor*5 + cosmetic*1, capped at 100
   for (const r of byModule.values()) {
     r.riskScore = Math.min(100, r.critical * 30 + r.major * 15 + r.minor * 5 + r.cosmetic * 1);
   }
@@ -63,18 +61,17 @@ function buildTrends(defects: DefectRow[]) {
   const total = defects.length;
   const open = defects.filter(d => isOpen(d.status)).length;
 
-  const resolved = defects.filter(d => d.resolved_date && d.reported_date);
+  const resolved = defects.filter(d => d.updated_at && d.created_at && !isOpen(d.status));
   const totalDays = resolved.reduce((sum, d) => {
-    const t1 = new Date(d.reported_date!).getTime();
-    const t2 = new Date(d.resolved_date!).getTime();
+    const t1 = new Date(d.created_at!).getTime();
+    const t2 = new Date(d.updated_at!).getTime();
     return sum + Math.max(0, (t2 - t1) / 86_400_000);
   }, 0);
   const avgResolutionDays = resolved.length ? +(totalDays / resolved.length).toFixed(1) : 0;
 
-  // Prefer recurring_tag (csv) → root_cause (db) for top causes
   const causeCount = new Map<string, number>();
   for (const d of defects) {
-    const key = (d.recurring_tag && d.recurring_tag.trim()) || (d.root_cause && d.root_cause.trim()) || 'Other';
+    const key = (d.root_cause && d.root_cause.trim()) || 'Other';
     causeCount.set(key, (causeCount.get(key) || 0) + 1);
   }
   const topRootCauses: RootCause[] = Array.from(causeCount.entries())
@@ -94,29 +91,17 @@ function buildTrends(defects: DefectRow[]) {
 function buildRecommendations(defects: DefectRow[], heatmap: HeatmapRow[]): string[] {
   const recs: string[] = [];
 
-  // Recurring tags (CSV path)
-  const tagCount = new Map<string, number>();
+  // Detect recurrence by module + root_cause signature
+  const sigCount = new Map<string, { count: number; module: string; cause: string }>();
   for (const d of defects) {
-    if (d.recurring_tag) tagCount.set(d.recurring_tag, (tagCount.get(d.recurring_tag) || 0) + 1);
+    const sig = `${d.module || ''}|${d.root_cause || ''}`;
+    const cur = sigCount.get(sig) || { count: 0, module: d.module || '', cause: d.root_cause || '' };
+    cur.count += 1;
+    sigCount.set(sig, cur);
   }
-  for (const [tag, count] of Array.from(tagCount.entries()).sort((a, b) => b[1] - a[1])) {
-    if (count >= 3) recs.push(`'${tag}' has recurred ${count} times — escalate as systemic; assign permanent fix owner.`);
-    else if (count === 2) recs.push(`'${tag}' has recurred ${count} times — monitor; prepare permanent fix if it appears again.`);
-  }
-
-  // DB path: detect recurrence by module + root_cause when no tag exists
-  if (tagCount.size === 0) {
-    const sigCount = new Map<string, { count: number; module: string; cause: string }>();
-    for (const d of defects) {
-      const sig = `${d.module || ''}|${d.root_cause || ''}`;
-      const cur = sigCount.get(sig) || { count: 0, module: d.module || '', cause: d.root_cause || '' };
-      cur.count += 1;
-      sigCount.set(sig, cur);
-    }
-    for (const v of Array.from(sigCount.values()).sort((a, b) => b.count - a.count)) {
-      if (v.count >= 3) recs.push(`'${v.module} / ${v.cause}' recurred ${v.count} times — systemic, escalate.`);
-      else if (v.count === 2) recs.push(`'${v.module} / ${v.cause}' recurred ${v.count} times — monitor.`);
-    }
+  for (const v of Array.from(sigCount.values()).sort((a, b) => b.count - a.count)) {
+    if (v.count >= 3) recs.push(`'${v.module} / ${v.cause}' recurred ${v.count} times — systemic, escalate.`);
+    else if (v.count === 2) recs.push(`'${v.module} / ${v.cause}' recurred ${v.count} times — monitor.`);
   }
 
   if (heatmap.length > 0 && heatmap[0].riskScore >= 30) {
@@ -128,97 +113,69 @@ function buildRecommendations(defects: DefectRow[], heatmap: HeatmapRow[]): stri
     recs.push(`${openCritical.length} Critical defect(s) still OPEN: ${openCritical.map(d => d.defect_id).filter(Boolean).join(', ') || '(no IDs)'} — block release sign-off.`);
   }
 
-  if (recs.length === 0) recs.push('No systemic patterns detected. Maintain current QA practice.');
+  if (recs.length === 0) recs.push('No systemic patterns detected in the selected window. Maintain current QA practice.');
   return recs;
 }
 
-function pickPeriodLabel(period: string): string {
-  const map: Record<string, string> = {
-    '30d': 'Last 30 days',
-    '3m': 'Last 3 months',
-    '6m': 'Last 6 months',
-    '1y': 'Last year',
-  };
-  return map[period] || period || 'Last 6 months';
-}
-
-// Parse the Jamkrindo defect-history CSV. Naive comma split — the demo CSV
-// doesn't quote fields. If you need quoted CSV support, swap to Papa Parse.
-function parseCsv(csv: string): DefectRow[] {
-  const lines = csv.trim().split(/\r?\n/);
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim());
-  const idx = (name: string) => headers.indexOf(name);
-  const out: DefectRow[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',');
-    if (cols.length < 2) continue;
-    const get = (k: string) => { const j = idx(k); return j >= 0 ? cols[j]?.trim() : undefined; };
-    out.push({
-      defect_id: get('defect_id'),
-      module: get('module'),
-      severity: get('severity'),
-      status: get('status'),
-      reported_date: get('reported_date'),
-      recurring_tag: get('recurring_tag'),
-      root_cause: get('root_cause'),
-      resolved_date: get('resolved_date') || null,
-    });
+// Map period code → SQLite "datetime modifier" for the WHERE clause
+function periodToModifier(period: string): { modifier: string; label: string } {
+  switch (period) {
+    case '30d': return { modifier: '-30 days', label: 'Last 30 days' };
+    case '3m':  return { modifier: '-90 days', label: 'Last 3 months' };
+    case '6m':  return { modifier: '-180 days', label: 'Last 6 months' };
+    case '1y':  return { modifier: '-365 days', label: 'Last year' };
+    default:    return { modifier: '-180 days', label: period || 'Last 6 months' };
   }
-  return out;
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const period = String(body.period || '6m');
+    const { modifier, label } = periodToModifier(period);
 
     let defects: DefectRow[] = [];
     let source = '';
 
-    if (body.csv && typeof body.csv === 'string' && body.csv.trim()) {
-      defects = parseCsv(body.csv);
-      source = `Uploaded CSV (${defects.length} defects)`;
-    } else {
+    try {
+      const db = getDb();
+      // Try to filter by created_at if present; fall back to all rows if column absent.
       try {
-        const db = getDb();
-        const rows = db.prepare(
-          `SELECT defect_id, module, severity, status, root_cause FROM defects`
-        ).all() as DefectRow[];
-        defects = rows;
-        source = `Database (${defects.length} defects)`;
+        defects = db.prepare(
+          `SELECT defect_id, module, severity, status, root_cause, created_at, updated_at
+           FROM defects
+           WHERE created_at >= datetime('now', ?)
+           ORDER BY created_at DESC`
+        ).all(modifier) as DefectRow[];
       } catch {
-        defects = [];
-        source = 'No data source available';
+        defects = db.prepare(`SELECT defect_id, module, severity, status, root_cause FROM defects`).all() as DefectRow[];
       }
+      source = `Database (${defects.length} defects in ${label.toLowerCase()})`;
+    } catch {
+      defects = [];
+      source = 'Database unavailable';
     }
 
     if (defects.length === 0) {
       return NextResponse.json({
-        period: pickPeriodLabel(period),
+        period: label,
         source,
         heatmap: [],
         trends: { totalDefects: 0, openDefects: 0, avgResolutionDays: 0, reopenRate: 0, topRootCauses: [] },
-        recommendations: ['No defects to analyze. Upload a defect history CSV or seed the database.'],
+        recommendations: [`No defects logged in ${label.toLowerCase()}. Try a longer window or seed the defects table.`],
       });
     }
 
     return NextResponse.json({
-      period: pickPeriodLabel(period),
+      period: label,
       source,
       heatmap: buildHeatmap(defects),
       trends: buildTrends(defects),
-      recommendations: buildRecommendations(defects, heatmap_for(defects)),
+      recommendations: buildRecommendations(defects, buildHeatmap(defects)),
     });
   } catch (error) {
     console.error('defect-patterns error:', error);
     const message = error instanceof Error ? error.message : 'Failed to analyze defect patterns';
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
-
-// Small helper to share the computed heatmap with recommendations without
-// computing twice. (Inlined to keep the file small.)
-function heatmap_for(defects: DefectRow[]) {
-  return buildHeatmap(defects);
 }

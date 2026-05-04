@@ -263,10 +263,13 @@ export default function ReportGeneratorPage() {
             <input
               type="text"
               className="ibm-input"
-              placeholder="e.g. Sprint 24, Q1 2025, March 2025"
+              placeholder="e.g. Sprint 24 — Penjaminan + ICPR Upload (Apr 2026)"
               value={sprint}
               onChange={(e) => setSprint(e.target.value)}
             />
+            <div className="text-[11px] text-[#6f6f6f] mt-1">
+              Pulls live data from the seeded Jamkrindo defects table — sprint 22-24 covers ICPR upload pattern + IJP drift + open Critical defects.
+            </div>
           </div>
         </div>
 

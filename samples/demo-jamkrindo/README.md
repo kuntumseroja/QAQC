@@ -13,7 +13,7 @@ All data is grounded in the FSDs in `Q/jamkrindo/` (Registrasi CIF dan Penjamina
 | `pipeline-validation-config.json` | ETL/Pipeline Validator | Budi (QC) | Data Analytics → Pipeline Validator |
 | `penjaminan-pipeline-log.txt` | Pipeline Validator (input log) | Budi (QC) | Data Analytics → Pipeline Validator |
 | `defect-icpr-sertifikat-upload-failure.txt` | Defect Classifier | Budi (QC) | Defects → Classifier |
-| `defect-history-sprint22-24.csv` | Defect Pattern Analyzer | Budi (QC) | Defects → Pattern Analyzer |
+| `defect-history-sprint22-24.csv` | (reference only — Pattern Analyzer reads live DB) | Budi (QC) | Defects → Pattern Analyzer |
 | `sprint24-test-results.csv` | Test Report Generator | Sarah (QA Leader) | Defects → Report Generator |
 
 The Tester (Diana) uses the FSDs in `Q/jamkrindo/` (gitignored locally) — point her to *FSD Registrasi CIF dan Penjaminan Cash Loan.docx* for the scenario-generator step.
@@ -51,14 +51,13 @@ Pasting `defect-icpr-sertifikat-upload-failure.txt`:
 - Suggested resolution: retry with backoff + circuit breaker + DLQ + cert PDF compression
 
 ### Defect Pattern Analyzer (Budi)
-Loading `defect-history-sprint22-24.csv` (16 defects across 3 sprints):
-- **Top recurring pattern**: `icpr-upload-failure` recurs **4×** across sprints 22 → 23 → 24
-- **Trend**: escalating 1 → 1 → 2 → 6 certs dropped per run (sprint 24 = 600% growth vs first occurrence)
+No upload — pick a Time Period and click **Analyze Patterns**. Reads directly from the seeded defects table (16 Jamkrindo defects across sprints 22–24).
+- **Top recurring pattern**: `Penjaminan / ICPR / Integration Timeout` recurs **4×** across sprints 22 → 23 → 24 (escalating 1 → 1 → 2 → 6 certs dropped per run)
 - **Other patterns**:
-  - `ijp-calculation-drift` (2× — DEF-0128, DEF-0133) — Maker/Approver see different IJP rate
-  - `bank-account-validation` (1× — DEF-0131) — BTN 13-digit savings account rejected
-  - `oracle-gl-post-failure` (1× — DEF-0132) — silent rollback on subrogasi
-- **Risk heatmap leader**: Penjaminan / ICPR Integration (highest severity × frequency)
+  - `Registrasi CIF / Validation Rule` (2× — NIK 15-digit + NPWP hyphen)
+  - Cache invalidation, type coercion, master sync, etc.
+- **Risk heatmap leader**: Penjaminan / ICPR (risk score 75 — 1 Critical + 3 Major)
+- **Open Critical**: DEF-2026-0130 (ICPR systemic), DEF-2026-0129 (NULL NIK)
 - **Recommendation**: prioritize permanent ICPR fix before next OJK monthly report
 
 ### Test Report Generator (Sarah)

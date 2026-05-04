@@ -56,8 +56,6 @@ export default function PatternAnalyzerPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PatternResult | null>(null);
   const [error, setError] = useState('');
-  const [csvContent, setCsvContent] = useState('');
-  const [csvFileName, setCsvFileName] = useState('');
 
   const periodLabels: Record<string, string> = {
     '30d': 'Last 30 days',
@@ -75,7 +73,7 @@ export default function PatternAnalyzerPage() {
       const res = await fetch('/api/defect-patterns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ period, csv: csvContent || undefined }),
+        body: JSON.stringify({ period }),
       });
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data: PatternResult = await res.json();
@@ -175,52 +173,20 @@ export default function PatternAnalyzerPage() {
       <div className="bg-white border border-[#e0e0e0] p-5 space-y-4">
         <h2 className="text-sm font-medium text-[#161616]">Analysis Parameters</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-[#525252] mb-1">Time Period</label>
-            <select
-              className="ibm-select"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-            >
-              <option value="30d">Last 30 days</option>
-              <option value="3m">Last 3 months</option>
-              <option value="6m">Last 6 months</option>
-              <option value="1y">Last year</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[#525252] mb-1">
-              Defect History CSV (optional)
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="file"
-                accept=".csv,.txt"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const text = await f.text();
-                  setCsvContent(text);
-                  setCsvFileName(f.name);
-                }}
-                className="text-xs flex-1"
-              />
-              {csvFileName && (
-                <button
-                  onClick={() => { setCsvContent(''); setCsvFileName(''); }}
-                  className="text-[11px] text-[#da1e28] hover:underline"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-            <div className="text-[11px] text-[#6f6f6f] mt-1">
-              {csvContent
-                ? <>Using uploaded CSV: <strong>{csvFileName}</strong></>
-                : <>Leave empty to analyse defects already in the database (seeded with Jamkrindo sprint 22-24).</>
-              }
-            </div>
+        <div className="max-w-xs">
+          <label className="block text-xs font-medium text-[#525252] mb-1">Time Period</label>
+          <select
+            className="ibm-select"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+          >
+            <option value="30d">Last 30 days</option>
+            <option value="3m">Last 3 months</option>
+            <option value="6m">Last 6 months</option>
+            <option value="1y">Last year</option>
+          </select>
+          <div className="text-[11px] text-[#6f6f6f] mt-1">
+            Reads from the live defects database (seeded with Jamkrindo sprints 22–24).
           </div>
         </div>
 
