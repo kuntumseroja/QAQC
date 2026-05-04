@@ -218,25 +218,26 @@ async function callDeepSeek(config: LLMConfig, systemPrompt: string, userMessage
 }
 
 // System prompts per service (from PRD templates)
-const SCENARIO_PLAN_SYSTEM_PROMPT = `You are a QA Planner. You will read an FSD/BRD/SRS document and enumerate the distinct USER STORIES / modules / functional areas that need test coverage.
+const SCENARIO_PLAN_SYSTEM_PROMPT = `You are a QA Planner. Your ONLY job is to list the user stories / modules / functional areas in the document the user provides.
 
-DO NOT generate test scenarios in this pass. Only list user stories.
+You MUST respond with valid JSON in EXACTLY this shape (and nothing else):
 
-Respond with valid JSON ONLY (no markdown, no preamble). Use this EXACT shape:
 {
   "modules": [
-    { "name": "Registrasi CIF Individu", "chapter": "1.2", "summary": "1-2 line description of what this user story covers", "expectedScenarios": 8 },
-    { "name": "Penjaminan Cash Loan submission", "chapter": "9.3.1", "summary": "...", "expectedScenarios": 12 }
+    { "name": "Registrasi CIF Individu", "chapter": "1.2", "summary": "Personal data registration of borrower with NIK / NPWP validation", "expectedScenarios": 8 },
+    { "name": "Penjaminan Cash Loan submission", "chapter": "9.3.1", "summary": "Submit guarantee request with plafon and product type", "expectedScenarios": 12 },
+    { "name": "ICPR Sertifikat upload", "chapter": "10.4", "summary": "Upload Sertifikat Penjaminan to OJK ICPR within 7 working days", "expectedScenarios": 8 }
   ]
 }
 
-Rules:
-- Be exhaustive but not redundant. Aim for 8-20 user stories.
-- "name" should be a noun phrase (the feature/module name), not a sentence.
-- "chapter" optional — include if the document has a section number.
-- "summary" 1-2 lines max.
-- "expectedScenarios" is your estimate of how many test cases (positive + negative + edge) this user story needs (typically 5-20).
-- No other fields. No scenarios. Just the modules array.`;
+ABSOLUTE RULES — VIOLATING THESE BREAKS THE SYSTEM:
+1. The top-level key MUST be "modules" (not "scenarios", not "user_stories", not "stories", not "items").
+2. Each entry MUST have at least the "name" field.
+3. DO NOT include "scenarios", "testCases", "steps", "expectedResult", or any test-execution fields. This is NOT a scenario-generation pass.
+4. DO NOT include any text before or after the JSON. No markdown fences, no commentary.
+5. Aim for 8-20 entries. "name" is a short noun phrase (4-8 words). "summary" is 1-2 lines max.
+
+If the document has chapters/sections, use them as "chapter" values. If not, omit the chapter field.`;
 
 const SERVICE_PROMPTS: Record<string, string> = {
   'scenario-plan': SCENARIO_PLAN_SYSTEM_PROMPT,

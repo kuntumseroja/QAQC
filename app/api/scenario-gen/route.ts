@@ -49,8 +49,51 @@ List the distinct user stories / modules / functional areas in the document belo
     options,
     llmConfig,
   });
-  const planResult = planResp.result as { modules?: PlanModule[] };
-  const modules = Array.isArray(planResult?.modules) ? planResult.modules : [];
+  // Accept any of these shapes the LLM might return:
+  //   { modules: [...] }
+  //   { user_stories: [...] } / { userStories: [...] }
+  //   { stories: [...] }
+  //   [...] (top-level array)
+  //   { anything: [{name|title|story|module: ..., summary?}, ...] } — first array of objects
+  const raw = planResp.result as Record<string, unknown>;
+  let arr: unknown[] = [];
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (raw && typeof raw === 'object') {
+    const candidates = ['modules', 'user_stories', 'userStories', 'stories', 'features', 'functional_areas', 'items'];
+    for (const k of candidates) {
+      if (Array.isArray((raw as Record<string, unknown>)[k])) {
+        arr = (raw as Record<string, unknown[]>)[k];
+        break;
+      }
+    }
+    if (arr.length === 0) {
+      // Last-resort: pick the first array-of-objects we find
+      for (const k of Object.keys(raw)) {
+        const v = (raw as Record<string, unknown>)[k];
+        if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'object') {
+          arr = v;
+          break;
+        }
+      }
+    }
+  }
+
+  // Normalize each entry to PlanModule shape (tolerate name/title/story/module keys).
+  const modules: PlanModule[] = (arr as Record<string, unknown>[])
+    .map((m) => ({
+      name: String(m.name || m.title || m.story || m.module || m.feature || m.area || '').trim(),
+      chapter: m.chapter ? String(m.chapter) : (m.section ? String(m.section) : (m.ref ? String(m.ref) : undefined)),
+      summary: m.summary ? String(m.summary) : (m.description ? String(m.description) : (m.desc ? String(m.desc) : undefined)),
+      expectedScenarios: typeof m.expectedScenarios === 'number' ? m.expectedScenarios
+        : typeof m.expected_scenarios === 'number' ? m.expected_scenarios as number
+        : typeof m.scenarios === 'number' ? m.scenarios as number
+        : 10,
+    }))
+    .filter(m => m.name.length > 0);
+
+  console.log(`[scenario-gen plan] provider=${planResp.provider} model=${planResp.model} returned ${modules.length} module(s) from raw keys=${Object.keys(raw || {}).join(',')}`);
+
   return {
     modules,
     _meta: {
