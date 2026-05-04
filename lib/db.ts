@@ -214,28 +214,31 @@ function initSchema(db: Database.Database) {
       insertDefect.run(...d);
     }
 
-    // Seed activity log
+    // Seed activity log — Jamkrindo Cash Loan / Penjaminan domain
     const insertActivity = db.prepare('INSERT INTO activity_log (service, action, details, user_name, created_at) VALUES (?, ?, ?, ?, ?)');
     const activities = [
-      ['MS-APP-001', 'Scenario Generation', 'Generated 47 test scenarios from BRD-PSP-2026-v3.docx', 'Lead Tester', '2026-04-10T09:30:00'],
-      ['MS-DEFECT-001', 'Defect Classification', 'Auto-classified 12 new defects with 89% avg confidence', 'System', '2026-04-10T10:15:00'],
-      ['MS-DATA-001', 'Data Profiling', 'Completed profiling on PSP transaction dataset (2.3M rows)', 'Data Analyst', '2026-04-10T11:00:00'],
-      ['MS-INFRA-001', 'IaC Review', 'Reviewed 23 Terraform files, found 5 critical findings', 'DevOps Engineer', '2026-04-10T11:45:00'],
-      ['MS-DEFECT-003', 'Report Generation', 'Generated Sprint 14 QC Summary Report', 'Technical Writer', '2026-04-10T14:00:00'],
-      ['MS-APP-002', 'Traceability Update', 'Updated traceability matrix: 94% coverage achieved', 'Senior Tester', '2026-04-10T15:30:00'],
+      ['MS-APP-001', 'Scenario Generation', 'Generated 110 test scenarios from FSD Registrasi CIF dan Penjaminan Cash Loan.docx', 'Diana Putri (Tester)', '2026-04-13T09:30:00'],
+      ['MS-DEFECT-001', 'Defect Classification', 'Classified ICPR Sertifikat upload timeout as Integration / Critical (regulatory)', 'Budi Santoso (QC Analyst)', '2026-04-13T10:15:00'],
+      ['MS-DATA-001', 'Data Profiling', 'Profiled cif_registrations: 3 NULL nik (Critical), 16 NPWP format violations (Major)', 'Budi Santoso (QC Analyst)', '2026-04-13T11:00:00'],
+      ['MS-DATA-002', 'Pipeline Validation', 'Penjaminan submission run: 6 of 22 sertifikat dropped at ICPR upload stage (HTTP 504)', 'Budi Santoso (QC Analyst)', '2026-04-13T11:30:00'],
+      ['MS-DEFECT-002', 'Pattern Analysis', 'icpr-upload-failure recurred 4× across sprints 22-24 — flagged as systemic', 'Budi Santoso (QC Analyst)', '2026-04-13T12:00:00'],
+      ['MS-APP-002', 'Traceability Update', 'Updated traceability: 92% coverage across 16 user stories (sprint 24)', 'Diana Putri (Tester)', '2026-04-13T13:15:00'],
+      ['MS-APP-004', 'Automation CodeGen', 'Generated Selenium POM skeletons for 24 Critical-priority Penjaminan scenarios', 'Diana Putri (Tester)', '2026-04-13T14:00:00'],
+      ['MS-DEFECT-003', 'Report Generation', 'Generated Sprint 24 QC Summary — 90.6% pass rate, conditional sign-off pending DEF-0130', 'Sarah Wijaya (QA Leader)', '2026-04-13T15:30:00'],
     ];
     for (const a of activities) {
       insertActivity.run(...a);
     }
 
-    // Seed uploaded documents
+    // Seed uploaded documents — Jamkrindo Cash Loan / Penjaminan domain
     const insertDoc = db.prepare('INSERT INTO uploaded_documents (file_name, file_size, file_type, content_hash, service_used, uploaded_by, status, content_preview, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const docs = [
-      ['BRD-PSP-Onboarding-v3.txt', 4521, 'text/plain', 'a1b2c3d4e5', 'MS-APP-001', 'Lead Tester', 'active', 'Business Requirements Document - PSP Onboarding System', '2026-04-08T09:00:00'],
-      ['SRS-Transaction-Processing-v2.txt', 6234, 'text/plain', 'f6g7h8i9j0', 'MS-APP-001', 'Senior Tester', 'active', 'Software Requirements Specification - Transaction Processing', '2026-04-09T10:30:00'],
-      ['swagger-payment-api.json', 8912, 'application/json', 'k1l2m3n4o5', 'MS-APP-003', 'Performance Tester', 'active', 'OpenAPI 3.0 Specification - Payment API', '2026-04-09T14:00:00'],
-      ['terraform-payment-infra.tf', 5678, 'text/plain', 'p6q7r8s9t0', 'MS-INFRA-001', 'DevOps Engineer', 'active', 'Terraform configuration for payment infrastructure', '2026-04-10T08:00:00'],
-      ['data-sample-transactions.csv', 3456, 'text/csv', 'u1v2w3x4y5', 'MS-DATA-001', 'Data Analyst', 'active', 'PSP Transaction data sample - 20 rows', '2026-04-10T11:00:00'],
+      ['FSD Registrasi CIF dan Penjaminan Cash Loan.docx', 187_452, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'a1b2c3d4e5', 'scenario-generator', 'Diana Putri (Tester)', 'active', 'FSD: Registrasi CIF Individu/Perorangan + Penjaminan Cash Loan (Reguler / Mikro / Korporat) per POJK 11/2025', '2026-04-13T09:00:00'],
+      ['FSD - Klaim dan Subrogasi Cash Loan V.1.0.docx', 156_318, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'f6g7h8i9j0', 'scenario-generator', 'Diana Putri (Tester)', 'active', 'FSD: Klaim partner bank + Subrogasi recovery flow (Mandiri/BRI/BNI/BTN)', '2026-04-13T09:15:00'],
+      ['cif_registrations.csv', 6_421, 'text/csv', 'u1v2w3x4y5', 'data-profiler', 'Budi Santoso (QC Analyst)', 'active', '25 CIF rows (3 with NULL nik, 16 with legacy NPWP hyphen format)', '2026-04-13T11:00:00'],
+      ['penjaminan-pipeline-log.txt', 2_841, 'text/plain', 'k1l2m3n4o5', 'pipeline-validator', 'Budi Santoso (QC Analyst)', 'active', 'JaGuarS ETL run 2026-04-13 — stage 06 ICPR upload failed for 6 sertifikat (HTTP 504)', '2026-04-13T11:30:00'],
+      ['defect-history-sprint22-24.csv', 4_127, 'text/csv', 'p6q7r8s9t0', 'pattern-analyzer', 'Budi Santoso (QC Analyst)', 'active', '16 defects across sprints 22-24 (recurring tag: icpr-upload-failure x4 escalating)', '2026-04-13T12:00:00'],
+      ['sprint24-test-results.csv', 1_982, 'text/csv', 'q9w8e7r6t5', 'report-generator', 'Sarah Wijaya (QA Leader)', 'active', 'Sprint 24 results: 16 user stories, 128 TC, 90.6% pass; lowest = ICPR Sertifikat Upload (25%)', '2026-04-13T15:00:00'],
     ];
     for (const d of docs) { insertDoc.run(...d); }
   }

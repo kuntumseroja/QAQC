@@ -82,7 +82,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-light text-[#161616]">Executive Quality Dashboard</h1>
-          <p className="text-sm text-[#525252] mt-0.5">AI-Powered QA/QC Platform — IBM Consulting</p>
+          <p className="text-sm text-[#525252] mt-0.5">Jamkrindo CashLoan QA/QC Platform — HCD-ID Quality Consulting Services / IBM Consulting</p>
         </div>
         <div className="flex items-center gap-4">
           {/* Data Source Toggle */}
@@ -203,14 +203,14 @@ export default function DashboardPage() {
 
       {/* Roadmap Summary */}
       <div className="bg-white border border-[#e0e0e0] p-4">
-        <h3 className="text-sm font-medium text-[#161616] mb-4">Delivery Roadmap - BSPI 2030</h3>
+        <h3 className="text-sm font-medium text-[#161616] mb-4">Jamkrindo CashLoan Delivery Roadmap — JaGuarS Modernization</h3>
         <div className="flex gap-2">
           {[
-            { phase: 'Phase 1', label: 'Foundation', period: 'Jul-Sep 2026', status: 'IN PROGRESS', color: '#0f62fe' },
-            { phase: 'Phase 2', label: 'Core Automation', period: 'Oct-Dec 2026', status: 'pending', color: '#009d9a' },
-            { phase: 'Phase 3', label: 'Advanced AI', period: 'Jan-Mar 2027', status: 'pending', color: '#8a3ffc' },
-            { phase: 'Phase 4', label: 'Full Integration', period: 'Apr-Jun 2027', status: 'pending', color: '#ee5396' },
-            { phase: 'Phase 5', label: 'PSP Onboarding', period: 'Jul-Dec 2027', status: 'pending', color: '#ff832b' },
+            { phase: 'Sprint 22-23', label: 'Foundation: CIF + NIK/NPWP Validation', period: 'Mar-Apr 2026', status: 'RESOLVED', color: '#198038' },
+            { phase: 'Sprint 24', label: 'Penjaminan Submission + ICPR Upload', period: 'Apr 2026', status: 'IN PROGRESS', color: '#0f62fe' },
+            { phase: 'Sprint 25-26', label: 'Klaim & Subrogasi + Oracle GL', period: 'May-Jun 2026', status: 'pending', color: '#009d9a' },
+            { phase: 'Sprint 27-28', label: 'Reporting OJK SPLM + Compliance', period: 'Jul-Aug 2026', status: 'pending', color: '#8a3ffc' },
+            { phase: 'Sprint 29-30', label: 'Partner Bank Integration (BTN/BNI)', period: 'Sep-Oct 2026', status: 'pending', color: '#ff832b' },
           ].map((item) => (
             <div key={item.phase} className="flex-1 p-3 border border-[#e0e0e0] relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-0.5" style={{ backgroundColor: item.color }} />

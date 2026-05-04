@@ -139,20 +139,21 @@ function getMockData() {
       };
     }),
     defectData: [
-      { module: 'Payment Gateway', critical: 2, major: 5, minor: 8, cosmetic: 3 },
-      { module: 'PSP Onboarding', critical: 1, major: 4, minor: 6, cosmetic: 2 },
-      { module: 'Transaction Proc', critical: 0, major: 3, minor: 5, cosmetic: 4 },
-      { module: 'Currency Module', critical: 1, major: 2, minor: 3, cosmetic: 1 },
-      { module: 'API Gateway', critical: 0, major: 2, minor: 4, cosmetic: 2 },
-      { module: 'Data Pipeline', critical: 1, major: 3, minor: 2, cosmetic: 0 },
+      { module: 'Penjaminan / ICPR', critical: 1, major: 3, minor: 0, cosmetic: 0 },
+      { module: 'Registrasi CIF', critical: 1, major: 1, minor: 1, cosmetic: 0 },
+      { module: 'Penjaminan / IJP Calculation', critical: 0, major: 1, minor: 0, cosmetic: 0 },
+      { module: 'Klaim / Bank Payment', critical: 0, major: 1, minor: 0, cosmetic: 0 },
+      { module: 'Subrogasi / Oracle GL', critical: 0, major: 1, minor: 0, cosmetic: 0 },
+      { module: 'Master Data / PKS', critical: 0, major: 0, minor: 1, cosmetic: 0 },
+      { module: 'Workflow / Approval', critical: 0, major: 0, minor: 1, cosmetic: 0 },
     ],
     activities: [
-      { service: 'MS-APP-001', action: 'Scenario Generation', details: 'Generated 47 test scenarios from BRD-PSP-2026-v3.docx', user_name: 'Lead Tester', created_at: '2026-04-10T09:30:00' },
-      { service: 'MS-DEFECT-001', action: 'Defect Classification', details: 'Auto-classified 12 new defects with 89% avg confidence', user_name: 'System', created_at: '2026-04-10T10:15:00' },
-      { service: 'MS-DATA-001', action: 'Data Profiling', details: 'Completed profiling on PSP transaction dataset (2.3M rows)', user_name: 'Data Analyst', created_at: '2026-04-10T11:00:00' },
-      { service: 'MS-INFRA-001', action: 'IaC Review', details: 'Reviewed 23 Terraform files, found 5 critical findings', user_name: 'DevOps Engineer', created_at: '2026-04-10T11:45:00' },
-      { service: 'MS-DEFECT-003', action: 'Report Generation', details: 'Generated Sprint 14 QC Summary Report', user_name: 'Technical Writer', created_at: '2026-04-10T14:00:00' },
-      { service: 'MS-APP-002', action: 'Traceability Update', details: 'Updated traceability matrix: 94% coverage achieved', user_name: 'Senior Tester', created_at: '2026-04-10T15:30:00' },
+      { service: 'MS-APP-001', action: 'Scenario Generation', details: 'Generated 110 test scenarios from FSD Registrasi CIF dan Penjaminan Cash Loan.docx', user_name: 'Diana Putri (Tester)', created_at: '2026-04-13T09:30:00' },
+      { service: 'MS-DEFECT-001', action: 'Defect Classification', details: 'Classified ICPR Sertifikat upload timeout as Integration / Critical (regulatory)', user_name: 'Budi Santoso (QC Analyst)', created_at: '2026-04-13T10:15:00' },
+      { service: 'MS-DATA-001', action: 'Data Profiling', details: 'Profiled cif_registrations: 3 NULL nik (Critical), 16 NPWP format violations (Major)', user_name: 'Budi Santoso (QC Analyst)', created_at: '2026-04-13T11:00:00' },
+      { service: 'MS-DATA-002', action: 'Pipeline Validation', details: 'Penjaminan submission run: 6 of 22 sertifikat dropped at ICPR upload stage (HTTP 504)', user_name: 'Budi Santoso (QC Analyst)', created_at: '2026-04-13T11:30:00' },
+      { service: 'MS-DEFECT-002', action: 'Pattern Analysis', details: 'icpr-upload-failure recurred 4× across sprints 22-24 — flagged as systemic', user_name: 'Budi Santoso (QC Analyst)', created_at: '2026-04-13T12:00:00' },
+      { service: 'MS-DEFECT-003', action: 'Report Generation', details: 'Generated Sprint 24 QC Summary — 90.6% pass rate, conditional sign-off pending DEF-0130', user_name: 'Sarah Wijaya (QA Leader)', created_at: '2026-04-13T15:30:00' },
     ],
   };
 }
