@@ -22,6 +22,9 @@ export default function CoverageRadarChart({ data }: CoverageRadarProps) {
           <Radar name="Target" dataKey="target" stroke="#da1e28" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
         </RadarChart>
       </ResponsiveContainer>
+      <p className="text-[11px] text-[#6f6f6f] text-center mt-2">
+        Standard: ISO/IEC 25010 SQuaRE (System and Software Quality Requirements and Evaluation)
+      </p>
     </div>
   );
 }
