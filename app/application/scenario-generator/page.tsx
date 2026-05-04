@@ -172,7 +172,12 @@ export default function ScenarioGeneratorPage() {
       if (!res.ok) throw new Error(raw.error || `API error: ${res.status}`);
       const modules: PlanModule[] = Array.isArray(raw.modules) ? raw.modules : [];
       if (modules.length === 0) {
-        throw new Error('No user stories detected. Try a different document or generate without planning.');
+        const onOllama = provider === 'ollama';
+        throw new Error(
+          onOllama
+            ? `${model} returned a response but no recognizable user stories. Small local models often free-form. Try llama3.1:8b for short FSDs or switch to Anthropic / DeepSeek for cloud-grade reliability. You can also click "Generate All At Once" to skip the planning pass.`
+            : 'No user stories detected. Try a different document or click "Generate All At Once" to skip planning.'
+        );
       }
       setPlanModules(modules);
       // Pre-select all modules by default

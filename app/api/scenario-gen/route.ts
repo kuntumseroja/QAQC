@@ -49,30 +49,42 @@ List the distinct user stories / modules / functional areas in the document belo
     options,
     llmConfig,
   });
-  // Accept any of these shapes the LLM might return:
-  //   { modules: [...] }
-  //   { user_stories: [...] } / { userStories: [...] }
-  //   { stories: [...] }
-  //   [...] (top-level array)
-  //   { anything: [{name|title|story|module: ..., summary?}, ...] } — first array of objects
+  // The LLM might return one of many shapes. Try them in priority order, but
+  // ONLY accept arrays whose entries actually look like modules (have a name/
+  // title/story/module/feature/area field). This prevents grabbing junk arrays
+  // like 'steps' or 'deliverables' from a project-skeleton response.
   const raw = planResp.result as Record<string, unknown>;
-  let arr: unknown[] = [];
-  if (Array.isArray(raw)) {
-    arr = raw;
+  const NAME_KEYS = ['name', 'title', 'story', 'module', 'feature', 'area'];
+  const isModuleArray = (v: unknown): v is Record<string, unknown>[] => {
+    if (!Array.isArray(v) || v.length === 0) return false;
+    const first = v[0];
+    if (!first || typeof first !== 'object') return false;
+    return NAME_KEYS.some(k => typeof (first as Record<string, unknown>)[k] === 'string');
+  };
+
+  let arr: Record<string, unknown>[] = [];
+  let matchedKey = '';
+
+  if (isModuleArray(raw as unknown)) {
+    arr = raw as unknown as Record<string, unknown>[];
+    matchedKey = '<top-level array>';
   } else if (raw && typeof raw === 'object') {
     const candidates = ['modules', 'user_stories', 'userStories', 'stories', 'features', 'functional_areas', 'items'];
     for (const k of candidates) {
-      if (Array.isArray((raw as Record<string, unknown>)[k])) {
-        arr = (raw as Record<string, unknown[]>)[k];
+      const v = (raw as Record<string, unknown>)[k];
+      if (isModuleArray(v)) {
+        arr = v as Record<string, unknown>[];
+        matchedKey = k;
         break;
       }
     }
     if (arr.length === 0) {
-      // Last-resort: pick the first array-of-objects we find
+      // Scan all values for the first one that looks like a module array
       for (const k of Object.keys(raw)) {
         const v = (raw as Record<string, unknown>)[k];
-        if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'object') {
-          arr = v;
+        if (isModuleArray(v)) {
+          arr = v as Record<string, unknown>[];
+          matchedKey = `${k} (fallback)`;
           break;
         }
       }
@@ -80,7 +92,7 @@ List the distinct user stories / modules / functional areas in the document belo
   }
 
   // Normalize each entry to PlanModule shape (tolerate name/title/story/module keys).
-  const modules: PlanModule[] = (arr as Record<string, unknown>[])
+  const modules: PlanModule[] = arr
     .map((m) => ({
       name: String(m.name || m.title || m.story || m.module || m.feature || m.area || '').trim(),
       chapter: m.chapter ? String(m.chapter) : (m.section ? String(m.section) : (m.ref ? String(m.ref) : undefined)),
@@ -92,7 +104,7 @@ List the distinct user stories / modules / functional areas in the document belo
     }))
     .filter(m => m.name.length > 0);
 
-  console.log(`[scenario-gen plan] provider=${planResp.provider} model=${planResp.model} returned ${modules.length} module(s) from raw keys=${Object.keys(raw || {}).join(',')}`);
+  console.log(`[scenario-gen plan] provider=${planResp.provider} model=${planResp.model} returned ${modules.length} module(s) from key='${matchedKey}' raw_top_keys=${raw && typeof raw === 'object' ? Object.keys(raw).join(',') : '(non-object)'}`);
 
   return {
     modules,
@@ -202,8 +214,25 @@ export async function POST(request: Request) {
 
     // Mode: plan — return module list only
     if (mode === 'plan') {
-      const result = await runPlan(inputContent, documentName, llmConfig, body.options);
-      return NextResponse.json(result);
+      try {
+        const result = await runPlan(inputContent, documentName, llmConfig, body.options);
+        return NextResponse.json(result);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : 'Unknown error';
+        const provider = (body.provider as string) || 'default';
+        const model = (body.model as string) || 'default';
+        // Most common cause on local Ollama: small models ignore JSON-mode and
+        // return prose. Give the user a clear next step.
+        const friendly = detail.includes('parsed')
+          ? `${provider}/${model} did not return valid JSON for the planning pass. Small local models (gemma, smaller llamas) often write narrative instead. Try a different model:
+  • llama3.1:8b (works for short FSDs, ~2-3 min)
+  • deepseek-coder-v2:16b (better JSON adherence)
+  • Or switch provider to Anthropic / DeepSeek for cloud-grade reliability.
+
+Underlying error: ${detail}`
+          : `Planning failed on ${provider}/${model}: ${detail}`;
+        return NextResponse.json({ error: friendly, modules: [] }, { status: 502 });
+      }
     }
 
     // Mode: generate-module — generate for one module supplied by caller
