@@ -1,13 +1,18 @@
 module,total_tc,passed,failed,blocked,pass_rate,owner,notes
 Registrasi CIF Individu,18,17,1,0,94.4%,Diana Putri,1 fail: NIK 15-digit accepted (DEF-0124 retest)
 NIK Validation,8,8,0,0,100.0%,Diana Putri,All ages of NIK regex covered
+NPWP Validation,6,5,1,0,83.3%,Diana Putri,1 fail: hyphen format accepted (DEF-0127)
 Plafon Limit (POJK 11/2025),12,12,0,0,100.0%,Diana Putri,All bracket boundaries covered (50M / 500M / 1B)
-Penjaminan Submission,15,11,4,0,73.3%,Diana Putri,4 fail: Pefindo timeout dropping records (DEF-0130)
-Maker / Checker / Approver,10,10,0,0,100.0%,Diana Putri,All 3 levels green
+Penjaminan Submission,15,15,0,0,100.0%,Diana Putri,All happy paths green; ICPR failure surfaces in pipeline test
+Maker / Checker / Approver,10,10,0,0,100.0%,Diana Putri,All 3 levels green; SLA breach edge case covered
+IJP Calculation (PKS rate),9,7,2,0,77.8%,Diana Putri,2 fail: stale PKS rate cache (DEF-0128) + type drift (DEF-0133)
 e-Materai (Peruri),6,6,0,0,100.0%,Diana Putri,Happy path + cancel + reprint covered
-Peruri Integration,4,4,0,0,100.0%,Diana Putri,Mocked in regression
 Dukcapil NIK Lookup,5,5,0,0,100.0%,Diana Putri,Includes 3 NULL NIK negative cases
-Pefindo CB Enrichment,8,5,3,0,62.5%,Diana Putri,Timeout cascades; covered by DEF-0130
-T24 Account Sync,7,7,0,0,100.0%,Diana Putri,
-ICPR Signing,5,5,0,0,100.0%,Diana Putri,
-TOTAL,98,90,8,0,91.8%,,
+ICPR Sertifikat Upload,8,2,6,0,25.0%,Diana Putri,6 fail: ICPR timeout cascades (DEF-0130 — systemic)
+Klaim Submission,7,7,0,0,100.0%,Diana Putri,
+Klaim Payment to Bank,6,5,1,0,83.3%,Diana Putri,1 fail: BTN 13-digit account rejected (DEF-0131)
+Subrogasi Recovery,5,5,0,0,100.0%,Diana Putri,
+Oracle GL Posting,4,3,1,0,75.0%,Diana Putri,1 fail: silent rollback on subrogasi (DEF-0132)
+Master Data PKS,4,4,0,0,100.0%,Diana Putri,
+Reporting (OJK SPLM),5,5,0,0,100.0%,Diana Putri,
+TOTAL,128,116,12,0,90.6%,,

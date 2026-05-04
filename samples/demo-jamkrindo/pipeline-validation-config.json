@@ -1,29 +1,33 @@
 {
   "pipeline_name": "penjaminan_submission",
+  "system": "JaGuarS (Jamkrindo)",
   "sprint": 24,
   "run_date": "2026-04-13",
   "stages": [
-    { "name": "01_dukcapil_validation",       "expected_rows": 25, "actual_rows": 22, "tolerance_pct": 0,  "status": "FAIL" },
-    { "name": "02_npwp_format_check",         "expected_rows": 22, "actual_rows": 22, "tolerance_pct": 0,  "status": "WARN", "warnings": 12 },
-    { "name": "03_pefindo_credit_bureau_enrich","expected_rows": 22, "actual_rows": 18, "tolerance_pct": 0, "status": "FAIL", "error": "upstream timeout" },
-    { "name": "04_plafon_bracket_check",      "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" },
-    { "name": "05_t24_account_provision",     "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" },
-    { "name": "06_icpr_signing",              "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" },
-    { "name": "07_peruri_emateral",           "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" },
-    { "name": "08_publish_to_warehouse",      "expected_rows": 18, "actual_rows": 18, "tolerance_pct": 0,  "status": "PASS" }
+    { "name": "01_dukcapil_validation",        "expected_rows": 25, "actual_rows": 22, "tolerance_pct": 0,  "status": "FAIL", "error": "3 rows missing NIK" },
+    { "name": "02_npwp_format_check",          "expected_rows": 22, "actual_rows": 22, "tolerance_pct": 0,  "status": "WARN", "warnings": 16 },
+    { "name": "03_plafon_bracket_check",       "expected_rows": 22, "actual_rows": 22, "tolerance_pct": 0,  "status": "PASS", "regulation": "POJK 11/2025" },
+    { "name": "04_ijp_calculation",            "expected_rows": 22, "actual_rows": 22, "tolerance_pct": 0,  "status": "PASS", "total_ijp_idr": 217000000 },
+    { "name": "05_peruri_emateral",            "expected_rows": 22, "actual_rows": 22, "tolerance_pct": 0,  "status": "PASS", "avg_pdf_size_mb": 3.2 },
+    { "name": "06_icpr_upload_sertifikat",     "expected_rows": 22, "actual_rows": 16, "tolerance_pct": 0,  "status": "FAIL", "error": "ICPR upstream timeout (HTTP 504) — 6 certs in PENDING_ICPR" },
+    { "name": "07_oracle_gl_post",             "expected_rows": 22, "actual_rows": 22, "tolerance_pct": 0,  "status": "PASS", "ledger": "ORACLE_GL_PROD" },
+    { "name": "08_publish_to_warehouse",       "expected_rows": 22, "actual_rows": 22, "tolerance_pct": 0,  "status": "PASS" }
   ],
   "expected_totals": {
     "fact_penjaminan": 25,
-    "dim_cif": 25
+    "dim_cif": 25,
+    "icpr_sertifikat_uploaded": 25
   },
   "actual_totals": {
-    "fact_penjaminan": 18,
-    "dim_cif": 22
+    "fact_penjaminan": 22,
+    "dim_cif": 22,
+    "icpr_sertifikat_uploaded": 16
   },
   "data_quality_rules": [
-    { "rule": "nik must not be null",                        "violations": 3,  "severity": "Critical" },
-    { "rule": "npwp must match XX.XXX.XXX.X-XXX.XXX format","violations": 16, "severity": "Major" },
-    { "rule": "plafon must be > 0",                          "violations": 0,  "severity": "Critical" },
-    { "rule": "produk in (Reguler, Mikro, Korporat)",        "violations": 0,  "severity": "Major" }
+    { "rule": "nik must not be null",                         "violations": 3,  "severity": "Critical", "regulation": "Internal data integrity" },
+    { "rule": "npwp must match XX.XXX.XXX.X-XXX.XXX format", "violations": 16, "severity": "Major",    "regulation": "DJP / Permenkeu 112/PMK.03/2022" },
+    { "rule": "plafon must be > 0",                           "violations": 0,  "severity": "Critical", "regulation": "Internal" },
+    { "rule": "produk in (Reguler, Mikro, Korporat)",         "violations": 0,  "severity": "Major",    "regulation": "PKS partner banks" },
+    { "rule": "Sertifikat Penjaminan uploaded to ICPR within 7 working days", "violations": 6, "severity": "Critical", "regulation": "OJK POJK 1/POJK.05/2016 Pasal 27" }
   ]
 }

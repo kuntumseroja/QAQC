@@ -181,17 +181,34 @@ function initSchema(db: Database.Database) {
       insertMetric.run('automation_rate', 40 + Math.random() * 35, 'application', dateStr);
     }
 
-    // Seed sample defects
+    // Seed sample defects — Jamkrindo Cash Loan / Penjaminan domain
     const insertDefect = db.prepare('INSERT INTO defects (defect_id, title, description, severity, priority, status, root_cause, module, assigned_team, confidence_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const sampleDefects = [
-      ['DEF-001', 'Payment timeout on high load', 'Transaction fails with timeout error when TPS exceeds 500', 'Critical', 'High', 'IN PROGRESS', 'Performance Bottleneck', 'Payment Gateway', 'Backend Team', 0.92],
-      ['DEF-002', 'Incorrect currency conversion', 'IDR to USD conversion off by 0.01%', 'Major', 'High', 'OPEN', 'Logic Error', 'Currency Module', 'Backend Team', 0.87],
-      ['DEF-003', 'Missing validation on PSP ID', 'PSP onboarding accepts invalid ID format', 'Major', 'Medium', 'CONFIRMED', 'Logic Error', 'PSP Onboarding', 'Integration Team', 0.95],
-      ['DEF-004', 'Dashboard chart not rendering', 'Quality metrics chart shows blank on Safari', 'Minor', 'Low', 'OPEN', 'Environment Issue', 'Dashboard', 'Frontend Team', 0.78],
-      ['DEF-005', 'API rate limiter too aggressive', 'Blocks legitimate batch requests from PSPs', 'Major', 'High', 'RESOLVED', 'Configuration Error', 'API Gateway', 'Platform Team', 0.91],
-      ['DEF-006', 'Data pipeline stale records', 'ETL pipeline not handling deleted source records', 'Major', 'Medium', 'UNDER REVIEW', 'Data Inconsistency', 'Data Pipeline', 'Data Team', 0.84],
-      ['DEF-007', 'Terraform state drift detected', 'Production IAM roles differ from IaC definition', 'Critical', 'High', 'IN PROGRESS', 'Configuration Error', 'Infrastructure', 'DevOps Team', 0.96],
-      ['DEF-008', 'Report generation OOM error', 'Large report (>10k records) causes memory overflow', 'Major', 'Medium', 'OPEN', 'Performance Bottleneck', 'Reporting', 'Backend Team', 0.89],
+      // Recurring pattern: ICPR upload failure (4 occurrences across sprints 22-24)
+      ['DEF-2026-0120', 'ICPR Sertifikat upload timeout (sprint 22)', 'ICPR (Indonesia Credit Penjaminan Repository) Sertifikat Penjaminan upload to api.icpr.ojk.go.id timed out (HTTP 504); 1 cert dropped from sprint 22 batch — OJK 7-day SLA at risk', 'Major', 'High', 'RESOLVED', 'Integration Timeout', 'Penjaminan / ICPR', 'Backend Team', 0.93],
+      ['DEF-2026-0122', 'ICPR Sertifikat upload timeout (sprint 23 #1)', 'ICPR upload timeout — 1 cert dropped from sprint 23 batch (recurring from DEF-0120); raised HTTP timeout to 60s, still insufficient for >2MB cert PDFs', 'Major', 'High', 'RESOLVED', 'Integration Timeout', 'Penjaminan / ICPR', 'Backend Team', 0.94],
+      ['DEF-2026-0125', 'ICPR Sertifikat upload timeout (sprint 23 #2)', 'ICPR upload timeout — 2 certs dropped this run (escalating); ICPR upstream slow during 09:00-11:00 WIB, no retry logic in client', 'Major', 'High', 'RESOLVED', 'Integration Timeout', 'Penjaminan / ICPR', 'Backend Team', 0.95],
+      ['DEF-2026-0130', 'ICPR Sertifikat upload timeout (sprint 24)', '4th occurrence — 6 certs dropped (escalation 1→1→2→6); pattern systemic; needs retry+circuit breaker+DLQ before OJK 7-day SLA breach on 2026-04-22', 'Critical', 'High', 'OPEN', 'Integration Timeout', 'Penjaminan / ICPR', 'Backend Team', 0.97],
+
+      // Recurring pattern: IJP calculation drift (2 occurrences)
+      ['DEF-2026-0128', 'IJP rate calculation drift between Maker and Approver', 'IJP rate Maker calculated 1.25% but Approver saw 1.50% — using stale PKS rate cached before mid-day update', 'Major', 'High', 'IN_PROGRESS', 'Cache Invalidation', 'Penjaminan / IJP Calculation', 'Backend Team', 0.88],
+      ['DEF-2026-0133', 'IJP rate type drift (number vs string)', 'IJP rate for cabang Bandung saved as 1.5 (number) but stored as "1.5" (string) in MySQL; type coercion lost during JSON marshalling', 'Minor', 'Medium', 'RESOLVED', 'Type Coercion', 'Master Data / IJP Rate', 'Backend Team', 0.82],
+
+      // Data integrity: NULL NIK + NPWP format
+      ['DEF-2026-0129', '3 rows with NULL nik in cif_registrations', 'Upstream form allows save-as-draft without NIK; staging table missing NOT NULL constraint', 'Critical', 'High', 'OPEN', 'Data Integrity', 'Registrasi CIF', 'Frontend Team', 0.99],
+      ['DEF-2026-0127', 'NPWP accepts hyphen format (should be dotted DJP)', 'NPWP validation accepts XX-XXX-XXX-X-XXX-XXX (legacy hyphen) instead of dotted DJP format; legacy data carries hyphens', 'Minor', 'Low', 'OPEN', 'Validation Rule', 'Registrasi CIF', 'Backend Team', 0.86],
+      ['DEF-2026-0124', 'NIK validation accepts 15-digit value', 'NIK regex bug — used \\d{15,16} instead of \\d{16}', 'Major', 'High', 'RESOLVED', 'Validation Rule', 'Registrasi CIF', 'Backend Team', 0.95],
+
+      // Klaim & Subrogasi
+      ['DEF-2026-0131', 'Klaim payout rejected: invalid BTN account format', 'Klaim payout to partner bank rejected — BTN savings uses 13-digit account but validator only accepts 10-digit', 'Major', 'High', 'OPEN', 'Validation Rule', 'Klaim / Bank Payment', 'Integration Team', 0.91],
+      ['DEF-2026-0132', 'Subrogasi recovery not posted to Oracle GL', 'Subrogasi recovery (Rp 250jt) not reflected in Oracle GL journal — integration job ran but transaction was rolled back silently', 'Major', 'High', 'IN_PROGRESS', 'Silent Failure', 'Subrogasi / Oracle GL', 'Backend Team', 0.89],
+
+      // Master data + workflow + housekeeping
+      ['DEF-2026-0123', 'New PKS partner code not in dropdown', 'BTN cabang Bandung PKS code not visible in dropdown — master sync job missed nightly window', 'Minor', 'Medium', 'RESOLVED', 'Master Sync', 'Master Data / PKS LOV', 'Data Team', 0.84],
+      ['DEF-2026-0126', 'Checker approval email not delivered', 'Maker did not receive Checker approval notification — SMTP relay misconfig after firewall change', 'Minor', 'Medium', 'RESOLVED', 'Configuration Error', 'Workflow / Approval', 'Platform Team', 0.85],
+      ['DEF-2026-0121', 'JaGuarS session expires too aggressively', 'Hardcoded 15min idle TTL — moved to config (30min default)', 'Minor', 'Medium', 'RESOLVED', 'Configuration Error', 'Authentication / Session', 'Platform Team', 0.79],
+      ['DEF-2026-0119', 'Long Indonesian names truncated in CIF form', 'nama_lengkap > 50 chars truncated; widened varchar to 100', 'Minor', 'Low', 'RESOLVED', 'Schema Limit', 'Registrasi CIF / UI', 'Frontend Team', 0.77],
+      ['DEF-2026-0118', 'Sprint 22 month-end report off by 1 row', 'Off-by-one in date range filter for fact_penjaminan', 'Low', 'Low', 'RESOLVED', 'Logic Error', 'Reporting', 'Backend Team', 0.75],
     ];
     for (const d of sampleDefects) {
       insertDefect.run(...d);

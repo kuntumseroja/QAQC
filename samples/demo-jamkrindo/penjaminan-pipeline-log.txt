@@ -7,41 +7,52 @@ Sprint 24 · Run 2026-04-13 · Job ID: PJM-RUN-20260413-001
 [2026-04-13 02:00:02] INFO  source=cif_registrations rows=25 status=OK
 [2026-04-13 02:00:05] INFO  stage=01_dukcapil_validation rows_in=25 rows_out=22 dropped=3 reason="NIK is null"
 [2026-04-13 02:00:05] WARN  stage=01_dukcapil_validation 3 records failed Dukcapil NIK lookup (null NIK upstream)
-[2026-04-13 02:00:09] INFO  stage=02_npwp_format_check rows_in=22 rows_out=22 invalid_format_warnings=12
+[2026-04-13 02:00:09] INFO  stage=02_npwp_format_check rows_in=22 rows_out=22 invalid_format_warnings=16
 [2026-04-13 02:00:09] WARN  stage=02_npwp_format_check 16 NPWP values use legacy hyphen format (XX-XXX-XXX-X-XXX-XXX) — should be XX.XXX.XXX.X-XXX.XXX per DJP spec
-[2026-04-13 02:00:18] INFO  stage=03_pefindo_credit_bureau_enrich rows_in=22 expected=22 attempted=22
-[2026-04-13 02:00:48] WARN  stage=03_pefindo_credit_bureau_enrich response_time=29800ms threshold=15000ms
-[2026-04-13 02:01:18] WARN  stage=03_pefindo_credit_bureau_enrich response_time=30000ms timeout reached
-[2026-04-13 02:01:18] ERROR stage=03_pefindo_credit_bureau_enrich rows_returned=18 expected=22 missing=4 reason="upstream timeout (HTTP 504 from api.pefindo.co.id)"
-[2026-04-13 02:01:18] ERROR stage=03_pefindo_credit_bureau_enrich missing_cif_ids=[CIF-2026-00011,CIF-2026-00014,CIF-2026-00020,CIF-2026-00024]
-[2026-04-13 02:01:18] WARN  stage=03_pefindo_credit_bureau_enrich row_count_mismatch in=22 out=18 delta=-4 (-18.18%)
-[2026-04-13 02:01:22] INFO  stage=04_plafon_bracket_check (POJK 11/2025) rows_in=18 rows_out=18
-[2026-04-13 02:01:22] INFO    bracket_breakdown: <=50M=2 50M-500M=12 500M-1B=3 >1B=1
-[2026-04-13 02:01:25] INFO  stage=05_t24_account_provision rows_in=18 rows_out=18 status=OK
-[2026-04-13 02:01:31] INFO  stage=06_icpr_signing rows_in=18 rows_out=18 status=OK
-[2026-04-13 02:01:35] INFO  stage=07_peruri_emateral rows_in=18 rows_out=18 status=OK
-[2026-04-13 02:01:36] INFO  stage=08_publish_to_warehouse rows=18 target=dwh.fact_penjaminan
-[2026-04-13 02:01:37] INFO  pipeline=penjaminan_submission stage=end status=PARTIAL_SUCCESS duration=96s
+[2026-04-13 02:00:13] INFO  stage=03_plafon_bracket_check (POJK 11/2025) rows_in=22 rows_out=22
+[2026-04-13 02:00:13] INFO    bracket_breakdown: <=50M=2 50M-500M=14 500M-1B=4 >1B=2
+[2026-04-13 02:00:18] INFO  stage=04_ijp_calculation (PKS rate per partner bank) rows_in=22 rows_out=22 total_ijp=Rp_217jt
+[2026-04-13 02:00:22] INFO  stage=05_peruri_emateral (apply e-materai to cert PDFs) rows_in=22 rows_out=22 avg_pdf_size=3.2MB
+[2026-04-13 02:00:30] INFO  stage=06_icpr_upload_sertifikat rows_in=22 expected=22 attempted=22 endpoint=api.icpr.ojk.go.id
+[2026-04-13 02:01:00] WARN  stage=06_icpr_upload_sertifikat response_time=29800ms threshold=15000ms
+[2026-04-13 02:01:30] WARN  stage=06_icpr_upload_sertifikat response_time=30000ms timeout reached for 6 of 22 cert uploads
+[2026-04-13 02:01:30] ERROR stage=06_icpr_upload_sertifikat rows_returned=16 expected=22 missing=6 reason="upstream timeout (HTTP 504 from api.icpr.ojk.go.id)"
+[2026-04-13 02:01:30] ERROR stage=06_icpr_upload_sertifikat missing_cif_ids=[CIF-2026-00006,CIF-2026-00010,CIF-2026-00011,CIF-2026-00014,CIF-2026-00020,CIF-2026-00024]
+[2026-04-13 02:01:30] WARN  stage=06_icpr_upload_sertifikat row_count_mismatch in=22 out=16 delta=-6 (-27.27%)
+[2026-04-13 02:01:30] WARN  stage=06_icpr_upload_sertifikat 6 sertifikat marked status='PENDING_ICPR' — manual reconciliation required
+[2026-04-13 02:01:33] INFO  stage=07_oracle_gl_post (premi receivable + IJP income) rows_in=22 rows_out=22 status=OK
+[2026-04-13 02:01:35] INFO  stage=08_publish_to_warehouse rows=22 target=dwh.fact_penjaminan
+[2026-04-13 02:01:36] INFO  pipeline=penjaminan_submission stage=end status=PARTIAL_SUCCESS duration=95s
 
 SUMMARY
 -------
-  Total CIF read           : 25
-  Dropped (null NIK)       :  3   <-- DATA QUALITY ISSUE (upstream)
-  NPWP format warnings     : 16   <-- DATA QUALITY ISSUE
-  Pefindo enrichment fails :  4   <-- INTEGRATION ISSUE (timeout)
-  Successfully published   : 18   (expected 25 → -28%)
-  Pipeline runtime         : 96s  (avg 64s, +50% slower than baseline)
+  Total CIF read              : 25
+  Dropped (null NIK)          :  3   <-- DATA QUALITY ISSUE (upstream)
+  NPWP format warnings        : 16   <-- DATA QUALITY ISSUE
+  ICPR upload failures        :  6   <-- INTEGRATION ISSUE (timeout, regulatory)
+  Sertifikat in PENDING_ICPR  :  6   <-- OJK 7-day SLA at risk
+  Successfully reported to OJK: 16   (expected 22 → -27%)
+  Pipeline runtime            : 95s  (avg 64s, +48% slower than baseline)
 
-PEFINDO INTEGRATION HEALTH
---------------------------
-  Last 10 sprint runs:
-    Sprint 22 (2026-03-30) : OK
-    Sprint 22 (2026-04-02) : OK
-    Sprint 23 (2026-04-04) : TIMEOUT (1 record)        <-- 1st
+ICPR INTEGRATION HEALTH (Indonesia Credit Penjaminan Repository)
+----------------------------------------------------------------
+  Last 8 sprint runs:
+    Sprint 22 (2026-03-28) : OK
+    Sprint 22 (2026-03-30) : TIMEOUT (1 cert)         <-- 1st
+    Sprint 23 (2026-04-04) : TIMEOUT (1 cert)         <-- 2nd
     Sprint 23 (2026-04-06) : OK
-    Sprint 23 (2026-04-08) : TIMEOUT (2 records)       <-- 2nd
+    Sprint 23 (2026-04-08) : TIMEOUT (2 certs)        <-- 3rd
     Sprint 24 (2026-04-10) : OK
     Sprint 24 (2026-04-11) : OK
-    Sprint 24 (2026-04-13) : TIMEOUT (4 records)       <-- 3rd, escalating
-  Recommendation: introduce exponential backoff retry + circuit breaker
-                  before sign-off. Trend is escalating (1 → 2 → 4 records).
+    Sprint 24 (2026-04-13) : TIMEOUT (6 certs)        <-- 4th, escalating
+
+  Trend: 1 → 1 → 2 → 6 (escalating). ICPR endpoint p95 latency degrading
+         OR our cert PDF size growing past their stated 2 MB upload limit
+         after we embedded e-materai (avg now 3.2 MB).
+
+  OJK SLA risk: 6 sertifikat must be uploaded by 2026-04-22 or
+                Jamkrindo breaches OJK 7-day reporting requirement
+                (POJK 1/POJK.05/2016 Pasal 27).
+
+  Recommendation: introduce retry + circuit breaker + DLQ + payload
+                  compression before next OJK monthly report (2026-05-01).

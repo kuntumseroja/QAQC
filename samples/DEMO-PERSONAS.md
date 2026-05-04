@@ -36,9 +36,9 @@ The Jamkrindo team is shipping the **CIF Registration & Penjaminan Cash Loan** f
 2. Goes to **Application → Test Scenario Generator**.
 3. Uploads `FSD Registrasi CIF dan Penjaminan Cash Loan.docx`.
 4. Picks **DeepSeek-V3** in the provider dropdown (matching Sarah's choice).
-5. Clicks **Identify Modules** — 12 modules detected (Registrasi CIF, NIK validation, Plafon limit per POJK 11/2025, Penjaminan submission, Maker/Checker/Approver, e-materai, Peruri integration, Dukcapil, Pefindo CB, T24 sync, ICPR, Reporting).
-6. Unticks "Reporting" (deferred to sprint 25), clicks **Generate Selected (11)**.
-7. Watches the table fill in module-by-module — 110 scenarios across 11 modules with FR mapping, priority, steps, expected results.
+5. Clicks **Identify User Stories** — 12 user stories detected (Registrasi CIF Individu, NIK validation, NPWP validation, Plafon limit per POJK 11/2025, Penjaminan submission, Maker/Checker/Approver workflow, IJP calculation per PKS, e-Materai/Peruri, Dukcapil, ICPR Sertifikat upload, Oracle GL posting, Reporting OJK SPLM).
+6. Unticks "Reporting OJK SPLM" (deferred to sprint 25), clicks **Generate Selected (11)**.
+7. Watches the table fill in user-story-by-user-story — 110 scenarios across 11 user stories with FR mapping, priority, steps, expected results.
 8. Exports to Excel for review.
 9. Goes to **Application → Automation Code Generator**, pastes the Critical-priority scenarios, picks Selenium → gets Page-Object code skeletons.
 
@@ -50,18 +50,18 @@ The Jamkrindo team is shipping the **CIF Registration & Penjaminan Cash Loan** f
 
 1. Sign in as `qc` / `qc123`.
 2. Goes to **Data Analytics → Data Quality Profiler** → uploads **`samples/demo-jamkrindo/cif_registrations.csv`** (25 rows). Finds 3 NULL `nik` values (Critical, rows 3/9/15) and 16 NPWP format violations (Major — legacy hyphen format).
-3. Opens **ETL/Pipeline Validator** → uploads **`samples/demo-jamkrindo/pipeline-validation-config.json`** + **`penjaminan-pipeline-log.txt`**. Spots row-count mismatch at stage `03_pefindo_credit_bureau_enrich` (expected 22, actual 18, missing 4 CIFs).
-4. Opens **Defects → Intelligent Defect Classifier** → pastes **`samples/demo-jamkrindo/defect-pefindo-timeout.txt`** → AI classifies as `Data Integrity / Pefindo / High`, suggests retry + circuit breaker + DLQ.
-5. Opens **Defects → Defect Pattern Analyzer** → loads **`samples/demo-jamkrindo/defect-history-sprint22-24.csv`** → pattern `pefindo-timeout` recurs 4× across sprints 22–24, escalating (1 → 2 → 4 records). Flags as systemic.
+3. Opens **ETL/Pipeline Validator** → uploads **`samples/demo-jamkrindo/pipeline-validation-config.json`** + **`penjaminan-pipeline-log.txt`**. Spots row-count mismatch at stage `06_icpr_upload_sertifikat` — 6 of 22 sertifikat dropped due to ICPR (Indonesia Credit Penjaminan Repository) HTTP 504 timeout. Flags OJK 7-day SLA risk per POJK 1/POJK.05/2016.
+4. Opens **Defects → Intelligent Defect Classifier** → pastes **`samples/demo-jamkrindo/defect-icpr-sertifikat-upload-failure.txt`** → AI classifies as `Integration / ICPR / Critical (regulatory)`, suggests retry + circuit breaker + DLQ + cert PDF compression.
+5. Opens **Defects → Defect Pattern Analyzer** → loads **`samples/demo-jamkrindo/defect-history-sprint22-24.csv`** (16 defects). Pattern `icpr-upload-failure` recurs **4×** across sprints 22 → 24, escalating 1 → 1 → 2 → 6 certs dropped per run. Other patterns surface: `ijp-calculation-drift`, `bank-account-validation`, `oracle-gl-post-failure`. Heatmap shows Penjaminan / ICPR Integration as highest risk.
 
 > **What Budi cares about:** data correctness, pipeline integrity, defect patterns across sprints.
 
 ### Step 4 — Sarah signs off
 
 1. Signs back in as `leader` / `leader123`.
-2. Opens **Defects → Test Report Generator** → loads **`samples/demo-jamkrindo/sprint24-test-results.csv`** (98 TC, 91.8% pass rate) plus the open defects from Budi's findings.
-3. Report highlights: Pefindo CB Enrichment lowest pass-rate module (62.5%), 1 Critical open (NULL NIK, DEF-2026-0129), 1 Major open systemic (Pefindo timeout, DEF-2026-0130).
-4. Signs off **conditional on the Pefindo fix (DEF-0130) landing first**.
+2. Opens **Defects → Test Report Generator** → loads **`samples/demo-jamkrindo/sprint24-test-results.csv`** (16 user stories, 128 TC, 90.6% pass rate) plus the open defects from Budi's findings.
+3. Report highlights: ICPR Sertifikat Upload lowest pass-rate user story (25.0%), 1 Critical open (NULL NIK, DEF-2026-0129), 1 Major open systemic (ICPR upload timeout, DEF-2026-0130 — regulatory).
+4. Signs off **conditional on the ICPR fix (DEF-0130) landing before the OJK 2026-04-22 7-day SLA deadline**.
 
 > **What Sarah cares about:** evidence-based sign-off, traceable risk decisions.
 

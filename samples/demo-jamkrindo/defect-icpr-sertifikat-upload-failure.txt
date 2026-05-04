@@ -1,0 +1,82 @@
+DEFECT REPORT — Sprint 24 · Penjaminan Cash Loan / Jamkrindo
+
+Title:
+  ICPR (Indonesia Credit Penjaminan Repository) Sertifikat Penjaminan
+  upload times out, dropping certificates from the regulatory submission
+  batch — OJK 7-day reporting SLA at risk.
+
+Reporter   : Budi Santoso (QC Analyst)
+Reported   : 2026-04-13 09:14 WIB
+Detected by: ETL Pipeline Validator (PJM-RUN-20260413-001)
+Environment: PROD-LIKE / Sprint 24 release candidate
+
+Regulatory context:
+  Per OJK POJK 1/POJK.05/2016 (jo. POJK 11/2025), every Sertifikat
+  Penjaminan issued by Jamkrindo MUST be uploaded to ICPR within 7
+  working days of issuance. Missing uploads carry an OJK administrative
+  penalty (Pasal 27) and risk losing the LJK (Lembaga Jasa Keuangan)
+  rating used by partner banks (Mandiri, BRI, BNI, BTN) when allocating
+  guarantee quota to Jamkrindo.
+
+Summary:
+  The 06_icpr_upload_sertifikat stage of the penjaminan_submission
+  pipeline is failing with HTTP 504 (gateway timeout) when calling
+  api.icpr.ojk.go.id. Today's run lost 6 of 18 certificates (-33.3%),
+  silently dropping high-value guarantees from the OJK report:
+    CIF-2026-00011 (Korporat, plafon Rp 2 B)
+    CIF-2026-00014 (Reguler,  plafon Rp 850 jt)
+    CIF-2026-00020 (Reguler,  plafon Rp 950 jt)
+    CIF-2026-00024 (Korporat, plafon Rp 1.2 B)
+    CIF-2026-00006 (Reguler,  plafon Rp 750 jt)
+    CIF-2026-00010 (Reguler,  plafon Rp 600 jt)
+
+Severity:
+  HIGH — regulatory + financial integrity. Total exposure of dropped
+  certs = Rp 6.95 B (~26% of sprint plafon). If not uploaded by
+  2026-04-22 (7 working days from issuance), Jamkrindo will be in
+  breach of OJK reporting requirement.
+
+Steps to reproduce:
+  1. Run pipeline=penjaminan_submission for sprint 24 cohort
+  2. Stage 06 ICPR upload hits 30s timeout for 6 records
+  3. Pipeline marks status=PARTIAL_SUCCESS (misleading — should FAIL)
+  4. ICPR confirmation IDs missing for the 6 certs
+  5. Internal sertifikat_status remains 'PENDING_ICPR' indefinitely
+
+Expected:
+  - ICPR upload succeeds with confirmation ID (ICPR-2026-XXXXXXXX), OR
+  - Failed records are retried with exponential backoff, OR
+  - Failed records routed to DLQ with PagerDuty alert to Compliance
+  - Pipeline final status = FAIL, not PARTIAL_SUCCESS
+
+Actual:
+  - 6 certificates silently dropped, no alert
+  - sertifikat_status stays 'PENDING_ICPR' with no auto-retry
+  - Compliance Officer has no visibility until manual reconciliation
+
+Pattern history (cross-sprint, same root cause):
+  Sprint 22 (2026-03-30) : ICPR timeout, 1 cert dropped  [DEF-2026-0120]
+  Sprint 23 (2026-04-04) : ICPR timeout, 1 cert dropped  [DEF-2026-0122]
+  Sprint 23 (2026-04-08) : ICPR timeout, 2 certs dropped [DEF-2026-0125]
+  Sprint 24 (2026-04-13) : ICPR timeout, 6 certs dropped [THIS DEFECT]
+  -> Trend escalating 1 → 1 → 2 → 6. ICPR endpoint degrading or our
+     payload size growing (cert PDFs now embed e-materai).
+
+Recommended fix (Definition of Done):
+  1. Wrap ICPR client in retry policy: 3 attempts, exponential backoff
+     (1s, 4s, 16s), total budget 90s (covers ICPR p95)
+  2. Add circuit breaker — open at 50% failure rate over 5-min window
+  3. Failed sertifikat → dead-letter queue (Kafka topic
+     jamkrindo.icpr.dlq), Compliance Officer dashboard polls the DLQ
+  4. PagerDuty alert if DLQ depth > 0 at end of run
+  5. Pipeline final status = FAIL (not PARTIAL_SUCCESS) when any cert
+     reaches DLQ — forces explicit Compliance ack
+  6. Compress cert PDFs >2 MB before upload (current avg = 3.2 MB
+     including embedded e-materai)
+  7. Add OJK 7-day countdown indicator on Compliance dashboard for
+     every cert in PENDING_ICPR state
+
+Attachments:
+  - penjaminan-pipeline-log.txt
+  - pipeline-validation-config.json
+  - defect-history-sprint22-24.csv
