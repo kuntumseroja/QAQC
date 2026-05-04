@@ -272,6 +272,7 @@ export default function DataProfilerPage({
           </div>
 
           <FileUpload
+            service="data-profiler"
             label="Data Sample File (CSV, JSON, Parquet schema)"
             accept=".csv,.json,.parquet,.xlsx,.txt"
             description="Upload a sample file — headers and up to 1,000 rows will be profiled."

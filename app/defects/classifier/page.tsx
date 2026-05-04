@@ -151,6 +151,7 @@ export default function DefectClassifierPage() {
         </div>
 
         <FileUpload
+          service="defect-classifier"
           label="Attach Screenshot (optional)"
           accept=".png,.jpg,.jpeg,.gif,.webp"
           description="Supports .png, .jpg, .gif, .webp — max 5MB"

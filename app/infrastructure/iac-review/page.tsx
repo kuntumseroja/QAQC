@@ -166,6 +166,7 @@ export default function IacReviewPage() {
         <h2 className="text-sm font-medium text-[#161616]">Input — Upload or Paste IaC Code</h2>
 
         <FileUpload
+          service="iac-review"
           label="Upload Terraform / Ansible / CloudFormation File"
           accept=".tf,.yaml,.yml,.json,.hcl,.template"
           description="Supports .tf, .yaml, .yml, .json, .hcl, .template files"

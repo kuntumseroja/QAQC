@@ -159,6 +159,7 @@ export default function SecurityScanPage() {
         <h2 className="text-sm font-medium text-[#161616]">Input — Upload or Paste Scan Results</h2>
 
         <FileUpload
+          service="security-scan"
           label="Upload Prowler / Scout Suite Results"
           accept=".json,.csv,.txt,.yaml,.yml"
           description="Supports Prowler JSON, Scout Suite JSON, and CSV output formats"

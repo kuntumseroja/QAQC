@@ -7,7 +7,29 @@ interface FileUploadProps {
   label: string;
   accept?: string;
   description?: string;
+  /** Service name for audit tracking, e.g. 'scenario-gen', 'data-profiler' */
+  service?: string;
   onFileContent: (content: string, fileName: string) => void;
+}
+
+// Fire-and-forget audit track. Failures here never block the upload flow.
+async function trackUpload(file: File, service: string | undefined, preview: string) {
+  try {
+    await fetch('/api/documents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'track',
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type || `application/${file.name.split('.').pop() || 'octet-stream'}`,
+        service: service || 'unknown',
+        preview: preview.substring(0, 200),
+      }),
+    });
+  } catch {
+    // ignore — audit tracking must not break uploads
+  }
 }
 
 // Extract text from PDF using pdfjs-dist
@@ -57,7 +79,7 @@ async function extractSpreadsheetText(file: File): Promise<string> {
   return sheets.join('\n\n');
 }
 
-export default function FileUpload({ label, accept = '.txt,.docx,.pdf,.json,.yaml,.yml,.tf,.py,.java,.scala', description, onFileContent }: FileUploadProps) {
+export default function FileUpload({ label, accept = '.txt,.docx,.pdf,.json,.yaml,.yml,.tf,.py,.java,.scala', description, service, onFileContent }: FileUploadProps) {
   const [fileName, setFileName] = useState<string>('');
   const [dragActive, setDragActive] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -95,6 +117,7 @@ export default function FileUpload({ label, accept = '.txt,.docx,.pdf,.json,.yam
       }
 
       onFileContent(text, file.name);
+      void trackUpload(file, service, text);
     } catch (err) {
       console.error('File processing error:', err);
       setError(`Failed to process file: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -102,6 +125,7 @@ export default function FileUpload({ label, accept = '.txt,.docx,.pdf,.json,.yam
       try {
         const text = await file.text();
         onFileContent(text, file.name);
+        void trackUpload(file, service, text);
       } catch {
         onFileContent(`[Unable to read file: ${file.name}]`, file.name);
       }

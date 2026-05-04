@@ -373,6 +373,7 @@ export default function ScenarioGeneratorPage() {
         </div>
 
         <FileUpload
+          service="scenario-generator"
           label="Upload BRD/SRS Document"
           accept=".txt,.docx,.pdf"
           description="Supports .txt, .docx, .pdf — max 10MB"

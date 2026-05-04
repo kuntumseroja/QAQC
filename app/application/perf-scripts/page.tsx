@@ -252,6 +252,7 @@ export default function PerfScriptsPage() {
         <h2 className="text-sm font-medium text-[#161616]">Configuration</h2>
 
         <FileUpload
+          service="perf-scripts"
           label="Upload OpenAPI / Swagger Specification"
           accept=".yaml,.yml,.json"
           description="Supports OpenAPI 3.x and Swagger 2.0 — .yaml, .yml, .json"

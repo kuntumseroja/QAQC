@@ -148,6 +148,7 @@ export default function VizValidatorPage({
           </div>
 
           <FileUpload
+            service="viz-validator"
             label="Dashboard Screenshot"
             accept=".png,.jpg,.jpeg,.webp,.pdf"
             description="Upload a screenshot of the dashboard (PNG, JPG, or PDF). The AI will analyse visual elements, labels, and layout."

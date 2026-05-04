@@ -199,6 +199,7 @@ export default function TraceabilityPage() {
           </div>
 
           <FileUpload
+            service="traceability"
             label="Upload Requirements Document"
             accept=".txt,.docx,.pdf,.xlsx"
             description="BRD, SRS, or requirements specification — .txt, .docx, .pdf"
@@ -254,6 +255,7 @@ export default function TraceabilityPage() {
           </div>
 
           <FileUpload
+            service="traceability"
             label="Upload Test Case Document"
             accept=".txt,.docx,.pdf,.xlsx,.csv,.json"
             description="Test case list, Jira export, or test scenario document — .txt, .xlsx, .csv"
