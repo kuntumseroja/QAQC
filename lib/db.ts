@@ -182,8 +182,14 @@ function initSchema(db: Database.Database) {
     }
 
     // Seed sample defects — Jamkrindo Cash Loan / Penjaminan domain
-    // Each row carries an explicit created_at so the Pattern Analyzer time
-    // period filter is meaningful (sprints 22-24 span 2026-03-28 → 2026-04-13).
+    // Defects span the past year so the Pattern Analyzer time-period filter
+    // is meaningful:
+    //   30d  -> sprints 23-24  (Apr 2026)         ~12 defects
+    //   3m   -> sprints 22-24  (Mar-Apr 2026)     ~16 defects
+    //   6m   -> sprints 20-24  (Jan-Apr 2026)     ~22 defects
+    //   1y   -> sprints 17-24  (Jul 2025-Apr 2026)~28 defects
+    // The ICPR upload pattern only emerges from sprint 22 onward — older
+    // sprints have unrelated defects, so the time window changes the story.
     const insertDefect = db.prepare('INSERT INTO defects (defect_id, title, description, severity, priority, status, root_cause, module, assigned_team, confidence_score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const sampleDefects: Array<[string, string, string, string, string, string, string, string, string, number, string, string]> = [
       // Recurring pattern: ICPR upload failure (4 occurrences across sprints 22-24)
@@ -211,6 +217,24 @@ function initSchema(db: Database.Database) {
       ['DEF-2026-0121', 'JaGuarS session expires too aggressively', 'Hardcoded 15min idle TTL — moved to config (30min default)', 'Minor', 'Medium', 'RESOLVED', 'Configuration Error', 'Authentication / Session', 'Platform Team', 0.79, '2026-04-01T10:00:00', '2026-04-04T14:00:00'],
       ['DEF-2026-0119', 'Long Indonesian names truncated in CIF form', 'nama_lengkap > 50 chars truncated; widened varchar to 100', 'Minor', 'Low', 'RESOLVED', 'Schema Limit', 'Registrasi CIF / UI', 'Frontend Team', 0.77, '2026-03-29T14:30:00', '2026-04-01T10:00:00'],
       ['DEF-2026-0118', 'Sprint 22 month-end report off by 1 row', 'Off-by-one in date range filter for fact_penjaminan', 'Low', 'Low', 'RESOLVED', 'Logic Error', 'Reporting', 'Backend Team', 0.75, '2026-03-28T16:00:00', '2026-03-31T18:00:00'],
+
+      // ----- Sprint 20-21 (Jan-Feb 2026) — within 6 months, outside 3 months -----
+      // ICPR pattern is NOT present here; only emerges in sprint 22+.
+      ['DEF-2026-0091', 'Plafon Korporat (>1B) auto-rejected by validator', 'Plafon validator hardcoded ceiling at Rp 1B — POJK 11/2025 raised Korporat ceiling to Rp 5B', 'Major', 'High', 'RESOLVED', 'Stale Threshold', 'Penjaminan / Plafon', 'Backend Team', 0.92, '2026-02-12T09:30:00', '2026-02-15T17:00:00'],
+      ['DEF-2026-0095', 'Dukcapil NIK lookup returns 500 for valid NIK with diacritics', 'NIK 3201012503850001 with name "Sari Indrāwati" causes Dukcapil API 500 — encoding issue in request body', 'Major', 'High', 'RESOLVED', 'Encoding Issue', 'Registrasi CIF / Dukcapil', 'Integration Team', 0.88, '2026-02-19T11:00:00', '2026-02-21T14:30:00'],
+      ['DEF-2026-0099', 'Sprint 20 Maker dashboard slow (8s load)', 'N+1 query on penjaminan list — added eager load + index', 'Minor', 'Medium', 'RESOLVED', 'Performance', 'Workflow / Approval', 'Backend Team', 0.83, '2026-01-22T13:00:00', '2026-01-26T10:00:00'],
+      ['DEF-2026-0103', 'PDF cert generator OOM on 100+ page bulk export', 'Apache PDFBox loaded all pages in memory — switched to streaming', 'Major', 'Medium', 'RESOLVED', 'Performance', 'Reporting', 'Backend Team', 0.86, '2026-02-03T15:30:00', '2026-02-08T18:00:00'],
+      ['DEF-2026-0108', 'IJP rate calculation drift between Maker and Approver', 'First occurrence of IJP drift — root cause never fully fixed, recurred in sprint 24 (DEF-0128)', 'Major', 'Medium', 'RESOLVED', 'Cache Invalidation', 'Penjaminan / IJP Calculation', 'Backend Team', 0.81, '2026-02-25T14:15:00', '2026-02-27T16:00:00'],
+      ['DEF-2026-0112', 'Klaim status webhook from BRI fires twice', 'Idempotency key not honored — duplicate Klaim records created', 'Major', 'High', 'RESOLVED', 'Idempotency', 'Klaim / Webhook', 'Integration Team', 0.89, '2026-03-04T10:00:00', '2026-03-06T15:00:00'],
+
+      // ----- Sprint 17-19 (Jul-Dec 2025) — within 1 year, outside 6 months -----
+      // Older issues, mostly resolved long ago. No ICPR pattern yet.
+      ['DEF-2025-0067', 'Login captcha not displayed on Safari iOS', 'reCAPTCHA v3 widget hidden by Safari ITP', 'Minor', 'Medium', 'RESOLVED', 'Browser Compatibility', 'Authentication / UI', 'Frontend Team', 0.78, '2025-09-14T10:00:00', '2025-09-18T14:00:00'],
+      ['DEF-2025-0072', 'PKS template missing OJK 2025 amendment clause', 'Master PKS doc template not updated after OJK SE 4/2025', 'Major', 'High', 'RESOLVED', 'Document Drift', 'Master Data / PKS Template', 'Compliance Team', 0.91, '2025-10-22T09:00:00', '2025-10-30T16:00:00'],
+      ['DEF-2025-0078', 'Subrogasi report shows wrong recovery percentage', 'Calculation used gross recovery instead of net (after legal fees)', 'Major', 'Medium', 'RESOLVED', 'Logic Error', 'Subrogasi / Reporting', 'Backend Team', 0.85, '2025-11-19T13:30:00', '2025-11-26T15:00:00'],
+      ['DEF-2025-0083', 'Sprint 18 deployment failed twice — Liquibase changeset conflict', 'Two devs added IJP_RATE column with different precision; rollback executed', 'Critical', 'High', 'RESOLVED', 'Schema Conflict', 'Master Data / IJP Rate', 'DevOps Team', 0.95, '2025-12-08T08:00:00', '2025-12-09T12:00:00'],
+      ['DEF-2025-0089', 'CIF search timeout for >10k row partner', 'Full-table scan on cif_registrations.nama_lengkap — added trigram index', 'Minor', 'Medium', 'RESOLVED', 'Missing Index', 'Registrasi CIF / Search', 'Backend Team', 0.80, '2025-12-19T11:00:00', '2025-12-23T17:00:00'],
+      ['DEF-2025-0058', 'Sprint 17 month-end report exported zero rows', 'Date filter used WIB local but DB stored UTC — off by 7 hours', 'Major', 'High', 'RESOLVED', 'Timezone', 'Reporting', 'Backend Team', 0.92, '2025-08-29T16:00:00', '2025-09-01T10:00:00'],
     ];
     for (const d of sampleDefects) {
       insertDefect.run(...d);
