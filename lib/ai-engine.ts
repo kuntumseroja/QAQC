@@ -88,13 +88,15 @@ export function buildConfigForProvider(provider: LLMProvider, model?: string): L
 // Available models for UI selection
 export const AVAILABLE_MODELS = {
   ollama: [
-    { id: 'llama3.1', name: 'Llama 3.1 (8B)', description: 'Fast local inference' },
+    // IDs use the canonical 'name:tag' that `ollama pull` creates.
+    { id: 'llama3.1:8b', name: 'Llama 3.1 (8B)', description: 'Fast local inference' },
     { id: 'llama3.1:70b', name: 'Llama 3.1 (70B)', description: 'Higher quality local inference' },
-    { id: 'codellama', name: 'Code Llama', description: 'Optimized for code generation' },
-    { id: 'mistral', name: 'Mistral 7B', description: 'Efficient general-purpose model' },
-    { id: 'mixtral', name: 'Mixtral 8x7B', description: 'MoE model, good for complex tasks' },
-    { id: 'qwen2.5-coder', name: 'Qwen 2.5 Coder', description: 'Strong coding model' },
-    { id: 'deepseek-coder-v2', name: 'DeepSeek Coder V2', description: 'Advanced code model' },
+    { id: 'gemma3:e4b', name: 'Gemma 3 (4B effort)', description: 'Compact Google model' },
+    { id: 'codellama:7b', name: 'Code Llama (7B)', description: 'Optimized for code generation' },
+    { id: 'mistral:7b', name: 'Mistral (7B)', description: 'Efficient general-purpose model' },
+    { id: 'mixtral:8x7b', name: 'Mixtral 8x7B', description: 'MoE model, good for complex tasks' },
+    { id: 'qwen2.5-coder:7b', name: 'Qwen 2.5 Coder (7B)', description: 'Strong coding model' },
+    { id: 'deepseek-coder-v2:16b', name: 'DeepSeek Coder V2 (16B)', description: 'Advanced code model' },
   ],
   anthropic: [
     { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', description: 'Latest Sonnet - fast & capable' },
@@ -114,7 +116,9 @@ export const AVAILABLE_MODELS = {
 async function callOllama(config: LLMConfig, systemPrompt: string, userMessage: string): Promise<string> {
   const baseUrl = config.baseUrl || 'http://localhost:11434';
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+  // Local 8B models on a laptop can take 2-4 min for large FSDs (prompt
+  // processing + decode). 60s was too aggressive.
+  const timeout = setTimeout(() => controller.abort(), 240000); // 4 min
   try {
     const response = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
@@ -130,7 +134,9 @@ async function callOllama(config: LLMConfig, systemPrompt: string, userMessage: 
         stream: false,
         options: {
           temperature: config.temperature ?? 0.3,
-          num_predict: config.maxTokens ?? 2048,
+          num_predict: config.maxTokens ?? 8192,
+          // Llama 3.1 supports 128k context — allow large FSDs to fit.
+          num_ctx: 16384,
         },
       }),
     });
@@ -212,7 +218,28 @@ async function callDeepSeek(config: LLMConfig, systemPrompt: string, userMessage
 }
 
 // System prompts per service (from PRD templates)
+const SCENARIO_PLAN_SYSTEM_PROMPT = `You are a QA Planner. You will read an FSD/BRD/SRS document and enumerate the distinct USER STORIES / modules / functional areas that need test coverage.
+
+DO NOT generate test scenarios in this pass. Only list user stories.
+
+Respond with valid JSON ONLY (no markdown, no preamble). Use this EXACT shape:
+{
+  "modules": [
+    { "name": "Registrasi CIF Individu", "chapter": "1.2", "summary": "1-2 line description of what this user story covers", "expectedScenarios": 8 },
+    { "name": "Penjaminan Cash Loan submission", "chapter": "9.3.1", "summary": "...", "expectedScenarios": 12 }
+  ]
+}
+
+Rules:
+- Be exhaustive but not redundant. Aim for 8-20 user stories.
+- "name" should be a noun phrase (the feature/module name), not a sentence.
+- "chapter" optional — include if the document has a section number.
+- "summary" 1-2 lines max.
+- "expectedScenarios" is your estimate of how many test cases (positive + negative + edge) this user story needs (typically 5-20).
+- No other fields. No scenarios. Just the modules array.`;
+
 const SERVICE_PROMPTS: Record<string, string> = {
+  'scenario-plan': SCENARIO_PLAN_SYSTEM_PROMPT,
   'scenario-gen': SCENARIO_GEN_SYSTEM_PROMPT,
   'traceability': 'You are a Requirements Traceability expert. Map each requirement to corresponding test cases, identify coverage gaps. Output as JSON with fields: matrix[] (requirementId, description, testCaseIds[], coverageStatus, gapNotes), coverage (total, covered, gaps, percentage).',
   'perf-scripts': `You are a Performance Engineer generating JMeter and Gatling test scripts for Bank Indonesia payment APIs.

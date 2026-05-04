@@ -82,6 +82,32 @@ export default function ScenarioGeneratorPage() {
     }
   }, [provider, availableModels]);
 
+  // When user picks Ollama, query the local server for the actually installed
+  // models so the dropdown reflects reality (not a hardcoded guess).
+  useEffect(() => {
+    if (provider !== 'ollama') return;
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'test-ollama' }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.success && Array.isArray(data.models) && data.models.length > 0) {
+          const live = data.models.map((m: { id: string; name?: string; size?: number }) => ({
+            id: m.id,
+            name: m.name || m.id,
+          }));
+          setAvailableModels(prev => ({ ...prev, ollama: live }));
+          if (!live.find((m: { id: string }) => m.id === model)) {
+            setModel(live[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider]);
+
   // Extract scenarios from any LLM response shape (handles snake_case, alt keys, plain arrays).
   const extractScenarios = (raw: Record<string, unknown>): Scenario[] => {
     let arr: unknown[] = [];

@@ -41,23 +41,10 @@ async function runPlan(
 ) {
   const startTime = Date.now();
   const planResp = await processAI({
-    service: 'scenario-gen',
-    prompt: `PLANNING PASS ONLY — do NOT generate test scenarios yet.
+    service: 'scenario-plan',  // dedicated planning system prompt — small models follow this better
+    prompt: `Document: ${documentName} (${inputContent.length} characters).
 
-Document name: ${documentName}
-Content length: ${inputContent.length} characters
-
-Read the FSD/BRD/SRS below and produce a JSON list of the distinct modules / domains / functional areas that need test coverage. Be exhaustive — include every chapter, screen, workflow, master data area, integration, and reporting feature.
-
-Respond with ONLY this JSON shape (no scenarios):
-{
-  "modules": [
-    { "name": "Registrasi CIF Individu", "chapter": "1.2", "summary": "1-2 line description", "expectedScenarios": 8 },
-    { "name": "Penjaminan Cash Loan", "chapter": "9.3.1", "summary": "...", "expectedScenarios": 12 }
-  ]
-}
-
-Aim for 8–25 modules. Each "expectedScenarios" should reflect realistic coverage (positive + negative + edge cases) for that module.`,
+List the distinct user stories / modules / functional areas in the document below as JSON only. Aim for 8-20 entries.`,
     input: inputContent,
     options,
     llmConfig,
